@@ -415,10 +415,111 @@ def main():
             print(f"  {G}Exported to {fn}{RES}"); time.sleep(1)
 
         elif choice=='4':
-            path=input(f"  {W}Combo file path: {RES}").strip()
-            if os.path.exists(path): combo_file=path; print(f"  {G}File set!{RES}")
-            else: print(f"  {R}Not found.{RES}")
-            time.sleep(1)
+    os.system('clear')
+    print(f"  {Y}BROWSE FOR COMBO FILE{RES}\n")
+    
+    # Common starting directories
+    dirs = [
+        os.path.expanduser("~"),
+        os.path.expanduser("~/downloads"),
+        "/sdcard",
+        "/storage/emulated/0",
+        "/storage/emulated/0/Download",
+    ]
+    # Filter to existing dirs
+    dirs = [d for d in dirs if os.path.isdir(d)]
+    
+    print(f"  {W}Quick access:{RES}")
+    for i, d in enumerate(dirs):
+        print(f"  {G}[{i+1}]{RES} {d}")
+    print(f"  {G}[M]{RES} Manual path entry")
+    print(f"  {G}[0]{RES} Back\n")
+    
+    choice2 = input(f"  {W}> {RES}").strip()
+    
+    if choice2 == '0':
+        continue
+    elif choice2.upper() == 'M':
+        path = input(f"  {W}Enter full path: {RES}").strip()
+        path = os.path.expanduser(path)  # Expand ~ if present
+        if os.path.exists(path):
+            combo_file = path
+            print(f"  {G}File set!{RES}")
+        else:
+            print(f"  {R}Not found: {path}{RES}")
+        time.sleep(1)
+    elif choice2.isdigit() and 1 <= int(choice2) <= len(dirs):
+        # Browse selected directory
+        current_dir = dirs[int(choice2)-1]
+        page = 0
+        per = 15
+        while True:
+            os.system('clear')
+            print(f"  {Y}Browsing: {current_dir}{RES}\n")
+            
+            try:
+                items = sorted(os.listdir(current_dir))
+            except PermissionError:
+                print(f"  {R}Permission denied.{RES}")
+                time.sleep(1)
+                break
+            
+            # Filter: show .txt files, directories, and combo-like files
+            visible = []
+            for item in items:
+                full = os.path.join(current_dir, item)
+                if os.path.isdir(full) and not item.startswith('.'):
+                    visible.append(('DIR', item))
+                elif os.path.isfile(full) and (item.endswith('.txt') or item.endswith('.combo') or 'combo' in item.lower() or 'ulp' in item.lower()):
+                    visible.append(('FILE', item))
+            
+            total_pages = (len(visible)-1)//per + 1 if visible else 1
+            start = page * per
+            for i, (typ, name) in enumerate(visible[start:start+per], start):
+                prefix = f"{C}[DIR]{RES}" if typ == 'DIR' else f"{W}[FILE]{RES}"
+                print(f"  {G}[{i+1}]{RES} {prefix} {name}")
+            
+            if not visible:
+                print(f"  {DIM}No compatible files found.{RES}")
+            
+            print(f"\n  {DIM}Page {page+1}/{total_pages} | [N]ext [P]rev [B]ack [M]anual{RES}")
+            sel = input(f"  {W}> {RES}").strip()
+            
+            if sel.upper() == 'B':
+                break
+            elif sel.upper() == 'N' and page < total_pages-1:
+                page += 1
+            elif sel.upper() == 'P' and page > 0:
+                page -= 1
+            elif sel.upper() == 'M':
+                path = input(f"  {W}Enter full path: {RES}").strip()
+                path = os.path.expanduser(path)
+                if os.path.isfile(path):
+                    combo_file = path
+                    print(f"  {G}File set!{RES}")
+                    break
+                elif os.path.isdir(path):
+                    current_dir = path
+                    page = 0
+                else:
+                    print(f"  {R}Not found.{RES}")
+                    time.sleep(0.8)
+            elif sel.isdigit():
+                idx = int(sel) - 1
+                if 0 <= idx < len(visible):
+                    typ, name = visible[idx]
+                    full = os.path.join(current_dir, name)
+                    if typ == 'DIR':
+                        current_dir = full
+                        page = 0
+                    else:
+                        combo_file = full
+                        print(f"  {G}File set! → {full}{RES}")
+                        time.sleep(1)
+                        break
+        
+        if combo_file:
+            break
 
         elif choice=='5':
             break
