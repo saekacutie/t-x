@@ -415,10 +415,9 @@ def main():
             print(f"  {G}Exported to {fn}{RES}"); time.sleep(1)
 
         elif choice=='4':
-             os.system('clear')
-             print(f"  {Y}BROWSE FOR COMBO FILE{RES}\n")
+    os.system('clear')
+    print(f"  {Y}BROWSE FOR COMBO FILE{RES}\n")
     
-    # Common starting directories
     dirs = [
         os.path.expanduser("~"),
         os.path.expanduser("~/downloads"),
@@ -426,7 +425,6 @@ def main():
         "/storage/emulated/0",
         "/storage/emulated/0/Download",
     ]
-    # Filter to existing dirs
     dirs = [d for d in dirs if os.path.isdir(d)]
     
     print(f"  {W}Quick access:{RES}")
@@ -441,7 +439,7 @@ def main():
         continue
     elif choice2.upper() == 'M':
         path = input(f"  {W}Enter full path: {RES}").strip()
-        path = os.path.expanduser(path)  # Expand ~ if present
+        path = os.path.expanduser(path)
         if os.path.exists(path):
             combo_file = path
             print(f"  {G}File set!{RES}")
@@ -449,7 +447,6 @@ def main():
             print(f"  {R}Not found: {path}{RES}")
         time.sleep(1)
     elif choice2.isdigit() and 1 <= int(choice2) <= len(dirs):
-        # Browse selected directory
         current_dir = dirs[int(choice2)-1]
         page = 0
         per = 15
@@ -464,7 +461,6 @@ def main():
                 time.sleep(1)
                 break
             
-            # Filter: show .txt files, directories, and combo-like files
             visible = []
             for item in items:
                 full = os.path.join(current_dir, item)
@@ -517,10 +513,7 @@ def main():
                         print(f"  {G}File set! → {full}{RES}")
                         time.sleep(1)
                         break
-        
-        if combo_file:
-            break
-
+                        
         elif choice=='5':
             break
 
