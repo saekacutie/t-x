@@ -3,9 +3,6 @@
 T-X TOOLKIT v3.0 — Real Browser Login Engine
 Created by Saeka Tojirp
 Usage : tx
-Uses Playwright to automate a real Chromium browser,
-extract live page content after login, and determine
-account validity from the actual DOM — not just keywords.
 """
 
 import os, sys, time, re, json, threading, random, hashlib, uuid, shutil
