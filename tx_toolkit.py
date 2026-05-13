@@ -15,7 +15,7 @@ from colorama import init, Fore, Style
 init(autoreset=True)
 
 # ---------- GLOBALS ----------
-OWNER_SERVER = "https://your-owner-server.onrender.com"   # CHANGE THIS
+OWNER_SERVER = "https://request-tracker--mitsukitobashi.replit.app"
 ALIAS_FILE = os.path.expanduser("~/.bashrc")
 
 R = Fore.RED; G = Fore.GREEN; B = Fore.BLUE; Y = Fore.YELLOW; M = Fore.MAGENTA; C = Fore.CYAN; W = Fore.WHITE
