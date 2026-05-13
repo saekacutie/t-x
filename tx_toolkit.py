@@ -415,8 +415,8 @@ def main():
             print(f"  {G}Exported to {fn}{RES}"); time.sleep(1)
 
         elif choice=='4':
-    os.system('clear')
-    print(f"  {Y}BROWSE FOR COMBO FILE{RES}\n")
+             os.system('clear')
+             print(f"  {Y}BROWSE FOR COMBO FILE{RES}\n")
     
     # Common starting directories
     dirs = [
