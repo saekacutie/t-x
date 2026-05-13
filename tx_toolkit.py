@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-T-X TOOLKIT v3.0 — Real Browser Login via Chrome DevTools Protocol
-No Playwright · Works on Termux · Full Animations · Glitch UI
+T-X TOOLKIT v3.0 
 Created by Saeka Tojirp
 Usage : tx
 """
