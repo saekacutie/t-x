@@ -379,7 +379,7 @@ def fb_submenu():
             return
     while True:
         os.system('clear')
-        print(f"  {C}{BOLD}FACEBOOK PAID SHARE{RES}\n")
+        print(f"  {C}{RES}FACEBOOK PAID SHARE{RES}\n")
         menu = [
             "[ 1 ] START SPAM SHARE",
             "[ 2 ] LOG IN",
@@ -726,7 +726,7 @@ def main():
             fb_submenu()
 
         elif choice=='6':
-            temp_mail_main()
+            tempmail_main()
 
         elif choice=='7':
             os.system('am start -a android.intent.action.VIEW -d https://facebook.com/saekacutiee 2>/dev/null || xdg-open https://facebook.com/saekacutiee 2>/dev/null')
