@@ -734,7 +734,7 @@ def main():
             fb_submenu()
 
         elif choice=='6':
-            temp_mail_generator()
+            temp_mail_main()
 
         elif choice=='7':
             os.system('am start -a android.intent.action.VIEW -d https://facebook.com/saekacutiee 2>/dev/null || xdg-open https://facebook.com/saekacutiee 2>/dev/null')
