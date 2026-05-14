@@ -51,14 +51,7 @@ def spin(text, sec=1.2):
         sys.stdout.write(f"\r  {C}{frm[i%6]} {W}{text}{RES}"); sys.stdout.flush()
         time.sleep(0.08); i+=1
     sys.stdout.write("\r"+" "*50+"\r")
-def progress(cur, tot, label=""):
-    if tot<=0: return
-    pct = int((cur/tot)*100)
-    filled = int(30*cur/tot)
-    bar = f"{G}{'█'*filled}{DIM}{'░'*(30-filled)}{RES}"
-    sys.stdout.write(f"\r  {label} |{bar}| {pct}% ({cur}/{tot})")
-    sys.stdout.flush()
-    if cur==tot: sys.stdout.write("\n")
+
 def wait_enter():
     input(f"\n  {DIM}Press ENTER to return...{RES}")
 
@@ -649,7 +642,6 @@ def main():
                     if r['active']: active+=1
                     st = f"{G}ACTIVE{RES}" if r['active'] else f"{R}INVALID{RES}"
                     print(f"  {W}{r['link'][:33]:<35}{DIM} | {RES}{W}{r['email'][:26]:<28}{DIM} | {RES}{W}{r['pass'][:18]:<20}{DIM} | {RES}{st}")
-                    progress(done,total,"Checking")
             with ThreadPoolExecutor(max_workers=3) as ex:
                 for url,email,pw in combos: ex.submit(worker,url,email,pw)
             print(f"\n  {G}{active}/{total} active.{RES}")
