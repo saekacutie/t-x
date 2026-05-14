@@ -64,40 +64,208 @@ def wait_enter():
 
 # ── TEMPMAIL (MAIL.TM) ──
 import string
-def temp_mail_generator():
-    os.system('clear')
-    print(f"\n  {C}{BOLD}TEMP MAIL GENERATOR{RES}\n")
-    print(f"  {DIM}This module uses mail.tm for a temporary inbox.{RES}")
-    # Generate a fresh email via mail.tm
+
+current_temp_email = None
+current_temp_service = None
+temp_mail_session = {"email":"","password":"","token":"","service":"","login":"","domain":"","sid_token":""}
+    
+def tempmail_main():
+    global current_temp_email, current_temp_service, temp_mail_session
+    options = [
+        "Generate New Temp Email (Mail.tm)",
+        "View Live Inbox (Auto-Refresh)",
+        "Copy Email Address",
+        "Back to Main Menu",
+    ]
+    selected = 0
+    while True:
+        os.system('clear')
+        banner()
+        print(f"  {Y}{BOLD}TEMP MAIL GENERATOR{RES}")
+        if current_temp_email:
+            print(f"  {C}Active: {current_temp_email}{RES}")
+        print()
+        for i, option in enumerate(options):
+            if i == selected:
+                print(f"  {G}{BOLD}▸ {option}{RES}")
+            else:
+                print(f"  {DIM}  {option}{RES}")
+        key = get_key()
+        if key == 'UP' and selected > 0: selected -= 1
+        elif key == 'DOWN' and selected < len(options) - 1: selected += 1
+        elif key == 'ENTER':
+            if selected == 0: generate_temp_email()
+            elif selected == 1: view_live_inbox()
+            elif selected == 2: copy_tempmail()
+            elif selected == 3: return
+
+def generate_temp_email():
+    global current_temp_email, current_temp_service, temp_mail_session
+    os.system('clear'); banner()
+    spinner("Creating secure inbox...", 1.5)
     try:
-        domain = requests.get("https://api.mail.tm/domains", timeout=10).json()['hydra:member'][0]['domain']
-        local = ''.join(random.choices(string.ascii_lowercase + string.digits, k=12))
-        email = f"{local}@{domain}"
+        # 1. Get domain
+        r = requests.get("https://api.mail.tm/domains", timeout=10)
+        if r.status_code != 200:
+            print(f"  {R}Failed to connect to Mail.tm.{RES}"); time.sleep(1.5); return
+        domain = r.json()['hydra:member'][0]['domain']
+        
+        # 2. Generate random email & password
+        local_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=12))
+        email = f"{local_part}@{domain}"
         password = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
-        acc = requests.post("https://api.mail.tm/accounts", json={"address": email, "password": password}, timeout=10)
-        if acc.status_code in (200, 201):
-            token = requests.post("https://api.mail.tm/token", json={"address": email, "password": password}).json()['token']
-            print(f"  {G}[+] Your temp email: {email}{RES}")
-            print(f"  {G}[+] Password: {password}{RES}")
-            print(f"  {DIM}Inbox will be polled every 3 seconds. Press ENTER to stop.{RES}\n")
-            # Poll inbox
-            while True:
-                try:
-                    r = requests.get("https://api.mail.tm/messages", headers={"Authorization": f"Bearer {token}"}, timeout=5)
-                    msgs = r.json().get('hydra:member', [])
-                    if msgs:
-                        for msg in msgs:
-                            print(f"  [{G}NEW{RES}] From: {msg.get('from',{}).get('address','?')} | Subject: {msg.get('subject','?')[:40]}")
-                    time.sleep(3)
-                except KeyboardInterrupt:
-                    break
-                except:
-                    pass
-        else:
-            print(f"  {R}Failed to create inbox.{RES}")
+        
+        # 3. Create account
+        acc_r = requests.post("https://api.mail.tm/accounts", json={"address": email, "password": password}, timeout=10)
+        if acc_r.status_code not in (200, 201):
+            print(f"  {R}Could not create inbox.{RES}"); time.sleep(1.5); return
+            
+        # 4. Get authentication token
+        token_r = requests.post("https://api.mail.tm/token", json={"address": email, "password": password}, timeout=10)
+        if token_r.status_code != 200:
+            print(f"  {R}Authentication failed.{RES}"); time.sleep(1.5); return
+        token = token_r.json()['token']
+        
+        # 5. Save to session
+        current_temp_email = email
+        current_temp_service = "mailtm"
+        temp_mail_session = {
+            "email": email,
+            "password": password,
+            "token": token,
+            "service": "mailtm",
+            "login": local_part,
+            "domain": domain
+        }
+        print(f"\n  {G}[OK] Inbox ready!{RES}")
+        print(f"  {W}Email: {C}{BOLD}{email}{RES}")
+        print(f"\n  {DIM}Select 'View Live Inbox' to check messages.{RES}")
     except Exception as e:
-        print(f"  {R}Error: {e}{RES}")
-    wait_enter()
+        print(f"  {R}Connection error: {e}{RES}")
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
+
+def view_live_inbox():
+    global current_temp_email, temp_mail_session
+    if not current_temp_email:
+        print(f"  {R}No active inbox. Generate one first.{RES}")
+        time.sleep(1.5); return
+
+    service = temp_mail_session.get('service', '')
+    if service != "mailtm":
+        print(f"  {R}Only Mail.tm inboxes are supported. Generate a new one.{RES}")
+        time.sleep(1.5); return
+
+    token = temp_mail_session.get('token', '')
+    if not token:
+        # Try getting a fresh token
+        try:
+            token_r = requests.post("https://api.mail.tm/token", json={
+                "address": temp_mail_session['email'],
+                "password": temp_mail_session['password']
+            }, timeout=10)
+            if token_r.status_code == 200:
+                token = token_r.json()['token']
+                temp_mail_session['token'] = token
+        except:
+            pass
+
+    if not token:
+        print(f"  {R}Authentication expired. Please generate a new inbox.{RES}")
+        time.sleep(1.5); return
+
+    # Poll for 50 seconds, refreshing every 1 second
+    start_time = time.time()
+    last_msg_count = 0
+
+    while time.time() - start_time < 50:
+        os.system('clear')
+        banner()
+        print(f"  {Y}LIVE INBOX (Auto-Refresh){RES}")
+        print(f"  {C}{current_temp_email}{RES}")
+        print(f"  {DIM}Refreshing every 1s. Waiting for messages...{RES}")
+        print()
+
+        try:
+            headers = {"Authorization": f"Bearer {token}"}
+            r = requests.get("https://api.mail.tm/messages", headers=headers, timeout=5)
+            if r.status_code == 200:
+                msgs = r.json().get('hydra:member', [])
+                if msgs:
+                    for i, msg in enumerate(msgs):
+                        msg_id   = msg.get('id', '')
+                        sender   = msg.get('from', {}).get('address', 'Unknown')
+                        subject  = msg.get('subject', 'No Subject')
+                        date     = msg.get('createdAt', '')
+                        # Extract body preview
+                        body_preview = msg.get('intro', msg.get('text', ''))[:100] if msg.get('intro') else ''
+                        
+                        print(f"  {G}[{i+1:02d}]{RES} From: {sender}")
+                        print(f"  {DIM}    Subject: {subject[:60]}{RES}")
+                        print(f"  {DIM}    Date: {date}{RES}")
+                        if body_preview:
+                            print(f"  {W}    Preview: {body_preview}{RES}")
+                        print()
+                    
+                    # Show full message content
+                    print(f"  {W}To view a message, enter the email number (e.g., 1), or press ENTER to refresh:{RES}")
+                    choice = input(f"  {W}Choice: {RES}").strip()
+                    if choice.isdigit():
+                        idx = int(choice) - 1
+                        if 0 <= idx < len(msgs):
+                            msg_id = msgs[idx].get('id', '')
+                            # Fetch full message
+                            try:
+                                r2 = requests.get(f"https://api.mail.tm/messages/{msg_id}", headers=headers, timeout=5)
+                                if r2.status_code == 200:
+                                    full = r2.json()
+                                    html = full.get('html', [])
+                                    if isinstance(html, list) and len(html) > 0:
+                                        body = html[0]
+                                    elif isinstance(html, str):
+                                        body = html
+                                    else:
+                                        body = full.get('text', 'No content')
+                                    os.system('clear')
+                                    banner()
+                                    print(f"  {Y}MESSAGE CONTENT{RES}")
+                                    print(f"  {G}From: {sender}{RES}")
+                                    print(f"  {G}Subject: {subject}{RES}")
+                                    print(f"  {G}Date: {date}{RES}")
+                                    print(f"  {G}{'─'*50}{RES}")
+                                    # Clean basic HTML
+                                    try:
+                                        body = re.sub(r'<[^>]+>', '', body)
+                                    except: pass
+                                    print(f"  {W}{body[:2000]}{RES}")
+                                    print(f"  {G}{'─'*50}{RES}")
+                                    input(f"\n  {DIM}Press ENTER to continue...{RES}")
+                                else:
+                                    print(f"  {R}Could not fetch message content.{RES}")
+                                    time.sleep(1)
+                            except:
+                                print(f"  {R}Error fetching message.{RES}")
+                                time.sleep(1)
+                    else:
+                        # Just refresh
+                        pass
+                else:
+                    print(f"  {DIM}No messages yet. Waiting...{RES}")
+            else:
+                print(f"  {R}Unable to connect to inbox. Retrying...{RES}")
+        except:
+            print(f"  {R}Network error. Retrying...{RES}")
+
+        time.sleep(1)
+
+    input(f"\n  {DIM}Auto-refresh stopped. Press ENTER to continue...{RES}")
+
+def copy_tempmail():
+    global current_temp_email
+    if not current_temp_email:
+        print(f"  {R}No active inbox.{RES}"); time.sleep(1.5); return
+    os.system(f'echo "{current_temp_email}" | termux-clipboard-set 2>/dev/null')
+    print(f"  {G}[OK] Email copied: {C}{current_temp_email}{RES}")
+    time.sleep(1.5)   
 
 # ── FACEBOOK SPAM SHARE ──
 FB_COOKIE = None
