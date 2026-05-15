@@ -5,7 +5,7 @@ Created by Saeka Tojirp
 Usage : tx
 """
 
-import os, sys, subprocess, time
+import os, sys, subprocess, time, re, requests
 
 # ── AUTO-INSTALLER / DEPENDENCY CHECK ──
 def check_dependencies():
