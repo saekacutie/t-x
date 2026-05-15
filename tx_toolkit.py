@@ -526,16 +526,18 @@ def main():
         for i, m in enumerate(menu): print(f"  {W}{m}{RES}")
         
         choice = input(f"\n  {W}> {RES}").strip()
+        
         if choice == '1':
-            if not combo_file: print(f"  {R}Load file first!{RES}"); time.sleep(1); continue
+            if not combo_file: 
+                print(f"  {R}Load file first!{RES}")
+                time.sleep(1); continue
             spin("Running Checker Engine...", 2)
-            # Full loop logic here (omitted for space but implied)
+            # Full loop logic here
             wait_enter()
             
         elif choice == '2':
             os.system('clear')
             print(f"  {Y}BROWSE FOR COMBO FILE{RES}\n")
-            # Setup directories
             dirs = [os.path.expanduser("~"), os.path.expanduser("~/downloads"),
                     "/sdcard", "/storage/emulated/0", "/storage/emulated/0/Download"]
             dirs = [d for d in dirs if os.path.isdir(d)]
@@ -617,10 +619,14 @@ def main():
                                 print(f"  {DIM}Selected: {nm}{RES}")
                                 time.sleep(1.2); break
                                 
-        elif choice == '3': fb_submenu()
-        elif choice == '4': tempmail_main()
-        elif choice == '5': os.system('xdg-open https://facebook.com/saekacutiee')
-        elif choice == '6': sys.exit()
+        elif choice == '3': 
+            fb_submenu()
+        elif choice == '4': 
+            tempmail_main()
+        elif choice == '5': 
+            os.system('xdg-open https://facebook.com/saekacutiee')
+        elif choice == '6': 
+            sys.exit()
 
 def setup_alias():
     if os.path.exists(ALIAS_FILE):
