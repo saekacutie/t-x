@@ -50,6 +50,8 @@ from colorama import init, Fore, Style
 init(autoreset=True)
 
 # ── CONFIG ──
+VERSION = "5.0"
+REPO_URL = "https://raw.githubusercontent.com/saekacutie/t-x/main/tx_toolkit.py"
 OWNER_SERVER = "https://request-tracker--mitsukitobashi.replit.app"
 APPROVED_FILE = os.path.expanduser("~/.tx_approved")
 TOKEN_FILE = os.path.expanduser("~/.tx_token")
@@ -478,6 +480,41 @@ def fb_submenu():
         elif ch == '3':
             FB_SHARE_SPEED = float(input(f"  {W}Interval (sec): {RES}") or "1")
         elif ch == '0': break
+
+   #-----CHECK----# 
+    def check_for_updates():
+    os.system('clear'); banner()
+    center_print("CHECKING FOR SYSTEM UPDATES", Y)
+    spin("Connecting to GitHub Repo...", 1.5)
+    try:
+        # Fetch the remote script to check version
+        response = requests.get(REPO_URL, timeout=10)
+        if response.status_code == 200:
+            # Look for VERSION = "X.X" in the remote file
+            remote_version_match = re.search(r'VERSION = "([^"]+)"', response.text)
+            if remote_version_match:
+                remote_version = remote_version_match.group(1)
+                
+                if remote_version != VERSION:
+                    print(f"\n  {G}[UPDATE FOUND]{W} Version {remote_version} is available!{RES}")
+                    confirm = input(f"  {W}Update now? (y/n): {RES}").lower()
+                    if confirm == 'y':
+                        spin("Downloading update...", 2)
+                        with open(__file__, 'w') as f:
+                            f.write(response.text)
+                        print(f"  {G}[SUCCESS]{W} Update installed! Restarting...{RES}")
+                        time.sleep(2)
+                        os.execv(sys.executable, ['python3'] + sys.argv)
+                else:
+                    print(f"\n  {G}[OK]{W} You are running the latest version (v{VERSION}).{RES}")
+                    time.sleep(1.5)
+        else:
+            print(f"  {R}[!] Could not connect to update server.{RES}")
+            time.sleep(1.5)
+    except Exception as e:
+        print(f"  {R}[!] Update check failed: {e}{RES}")
+        time.sleep(2)
+        
         
 # ── REAL CHROME ENGINE ──
 class RealChrome:
@@ -639,8 +676,9 @@ def main():
             "[3] FACEBOOK SHARE",
             "[4] FACEBOOK OSINT",
             "[5] TEMPMAIL", 
-            "[6] CONTACT OWNER", 
-            "[7] EXIT"
+            "[6] CONTACT OWNER",
+            "[7] CHECK FOR UPDATE",
+            "[8] EXIT"
         ]
         for m in menu: print(f"  {W}{m}{RES}")
         
@@ -703,11 +741,12 @@ def main():
                             if tp == 'DIR': cur = full; page = 0
                             else: combo_file = full; print(f"  {G}File set!{RES}"); time.sleep(1); break
                                 
-        elif choice == '2': fb_submenu()
-        elif choice == '3': tempmail_main()
-        elif choice == '4':  fb_osint_deep_scan()
-        elif choice == '5': os.system('xdg-open https://facebook.com/saekacutiee')
-        elif choice == '6': sys.exit()
+        elif choice == '3': fb_submenu()
+        elif choice == '4': tempmail_main()
+        elif choice == '5': fb_osint_deep_scan()
+        elif choice == '6': os.system('xdg-open https://facebook.com/saekacutiee')
+        elif choice == '7': check_for_updates()
+        elif choice == '8': sys.exit()
 
 def setup_alias():
     if os.path.exists(ALIAS_FILE):
