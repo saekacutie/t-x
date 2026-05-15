@@ -50,7 +50,7 @@ from colorama import init, Fore, Style
 init(autoreset=True)
 
 # ── CONFIG ──
-VERSION = ("6.0")
+VERSION = "6.0"
 REPO_URL = "https://raw.githubusercontent.com/saekacutie/t-x/main/tx_toolkit.py"
 OWNER_SERVER = "https://request-tracker--mitsukitobashi.replit.app"
 APPROVED_FILE = os.path.expanduser("~/.tx_approved")
