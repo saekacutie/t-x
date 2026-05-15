@@ -531,7 +531,8 @@ def main():
             spin("Running Checker Engine...", 2)
             # Full loop logic here (omitted for space but implied)
             wait_enter()
-                elif choice == '2':
+            
+        elif choice == '2':
             os.system('clear')
             print(f"  {Y}BROWSE FOR COMBO FILE{RES}\n")
             # Setup directories
@@ -615,7 +616,7 @@ def main():
                                 print(f"  {G}File set!{RES}")
                                 print(f"  {DIM}Selected: {nm}{RES}")
                                 time.sleep(1.2); break
-
+                                
         elif choice == '3': fb_submenu()
         elif choice == '4': tempmail_main()
         elif choice == '5': os.system('xdg-open https://facebook.com/saekacutiee')
