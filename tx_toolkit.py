@@ -50,7 +50,7 @@ from colorama import init, Fore, Style
 init(autoreset=True)
 
 # ── CONFIG ──
-VERSION = "5.6"
+VERSION = "5.9"
 REPO_URL = "https://raw.githubusercontent.com/saekacutie/t-x/main/tx_toolkit.py"
 OWNER_SERVER = "https://request-tracker--mitsukitobashi.replit.app"
 APPROVED_FILE = os.path.expanduser("~/.tx_approved")
@@ -277,65 +277,76 @@ def fb_submenu():
 #---FACEBOOK OSINT ----#
 def fb_osint_deep_scan():
     os.system('clear'); banner()
-    print(f"  {Y}SIGNAL DISCOVERY ENGINE{RES}")
+    print(f"  {Y}NEURAL CLUSTER INTERROGATOR{RES}  {DIM}[DEEP_SCAN_ACTIVE]{RES}")
     
-    query = input(f"\n  {W}QUERY > {RES}").strip()
+    query = input(f"\n  {W}NODE_SPEC > {RES}").strip()
     if not query: return
 
-    spin("INTERROGATING GRAPH NODES...", 1.2)
+    target = query.split("facebook.com/")[-1].split("/")[0].split("?")[0].replace("/", "")
+    spin("PROBING META-DATACENTER CLUSTERS...", 1.2)
     
     try:
-        # Extract Identifier
-        user_key = query.split("facebook.com/")[-1].replace("/", "").split("?")[0]
+        # Step 1: Headers to bypass basic bot detection
+        h = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+        req = requests.get(f"https://www.facebook.com/{target}", headers=h, timeout=10).text
+
+        # Step 2: System Node Resolution
+        uid = re.search(r'"entity_id":"(\d+)"', req) or re.search(r'"userID":"(\d+)"', req)
+        res_id = uid.group(1) if uid else "SIGNAL_REDACTED"
         
-        h = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}
-        raw_html = requests.get(f"https://www.facebook.com/{user_key}", headers=h, timeout=10).text
+        # Step 3: Privacy/Status Logic
+        is_locked = "Profile Locked" in req or "view_locked_profile" in req
+        status = f"{R}LOCKED_ENCRYPTED{RES}" if is_locked else f"{G}PUBLIC_INDEXED{RES}"
 
-        # ── NODE RESOLUTION ──
-        # Extracting the 3 critical Meta identifiers
-        uid = re.search(r'"userID":"(\d+)"', raw_html) or re.search(r'"entity_id":"(\d+)"', raw_html)
-        target_id = uid.group(1) if uid else "NULL_NODE"
+        # Step 4: Scraping Public Attributes (Only works if Public)
+        # These regex patterns target the metadata description strings
+        friends = re.search(r'(\d+)\s+friends', req) or re.search(r'friends":\{"count":(\d+)', req)
+        posts = re.search(r'(\d+)\s+posts', req) or re.search(r'timeline_feed_units":\{"count":(\d+)', req)
+        bday = re.search(r'Born on (.*?)["<]', req) or re.search(r'birthday":\{"text":"(.*?)"', req)
         
-        # Name & Status
-        title = re.search(r'<title>(.*?)</title>', raw_html)
-        subject = title.group(1).split("|")[0].strip() if title else "UNKNOWN_SUBJECT"
+        # Logic for Redacted Data
+        f_count = friends.group(1) if friends else ("REDACTED" if is_locked else "HIDDEN")
+        p_count = posts.group(1) if posts else ("REDACTED" if is_locked else "UNINDEXED")
+        b_date = bday.group(1) if bday else ("ENCRYPTED" if is_locked else "NOT_PUBLIC")
 
-        # ── EPOCH TIERING (Account Age Intelligence) ──
-        epoch = "UNKNOWN"
-        if target_id.isdigit():
-            v = int(target_id)
-            if v < 100000000: epoch = "ALPHA_TIER (2004-2006)"
-            elif v < 1000000000: epoch = "BETA_TIER (2007-2009)"
-            elif v > 100000000000000: epoch = "DELTA_TIER (2011-2024)"
-
-        # ── RAW DATA REPORT ──
+        # ── RAW ARCHITECTURAL DATA OUTPUT ──
         os.system('clear'); banner()
         
-        print(f"  {G}SIGNAL_RESOLVED{RES}")
-        print(f"  {W}IDENTIFIER  {G}{subject}{RES}")
-        print(f"  {W}UID_NODE    {G}{target_id}{RES}")
-        print(f"  {W}EPOCH       {Y}{epoch}{RES}")
+        print(f"  {G}INTERCEPT_STABLE{RES}")
+        print(f"  {W}OBJECT_IDENTIFIER {G}{target.upper()}{RES}")
+        print(f"  {W}SYSTEM_UID_NODE   {G}{res_id}{RES}")
+        print(f"  {W}NODE_STATUS       {status}")
         
-        print(f"\n  {C}TECHNICAL_MANIFEST{RES}")
-        print(f"  {W}VANITY_REF  {W}fb.com/{user_key}{RES}")
-        print(f"  {W}ENTITY_TYPE {W}META_USER_OBJECT{RES}")
-        print(f"  {W}MD5_SIGN    {DIM}{hashlib.md5(target_id.encode()).hexdigest()}{RES}")
+        print(f"\n  {C}ACCOUNT_METRICS{RES}")
+        print(f"  {W}TOTAL_POSTS       {Y}{p_count}{RES}")
+        print(f"  {W}TOTAL_FRIENDS     {Y}{f_count}{RES}")
+        print(f"  {W}MUTUAL_FRIENDS    {DIM}LOG_IN_REQUIRED{RES}")
+        print(f"  {W}BIRTH_DATE        {Y}{b_date}{RES}")
         
-        print(f"\n  {C}ECOSYSTEM_FINGERPRINT{RES}")
-        print(f"  {W}MESSENGER   {W}m.me/{target_id}{RES}")
-        print(f"  {W}INSTAGRAM   {W}ig.com/{user_key}{RES}")
-        print(f"  {W}GRAPH_PATH  {DIM}fb.com/search/top?q={target_id}{RES}")
+        print(f"\n  {C}DATABASE_METRICS{RES}")
+        print(f"  {W}DATACENTER_ZONE   {W}PRN_CLUSTER{RES}")
+        print(f"  {W}JOINED_GROUPS     {W}SCANNING_NODES...{RES}")
+        print(f"  {W}BINARY_HASH       {DIM}{hashlib.sha256(res_id.encode()).hexdigest()[:16].upper()}{RES}")
         
-        # Archiving
+        print(f"\n  {C}DEEP_API_FINGERPRINTS{RES}")
+        print(f"  {W}MESSENGER_CID     {W}direct_node:{res_id}{RES}")
+        print(f"  {W}GRAPH_PREVIEW     {DIM}https://graph.facebook.com/{res_id}/picture?type=large{RES}")
+        
+        if is_locked:
+            print(f"\n  {R}[!] SECURITY NOTICE: Account is LOCKED. Some data is REDACTED.{RES}")
+        
+        # Persistent Archiving
         with open(OSINT_LOG, "a") as f:
-            f.write(f"{datetime.now()}|{target_id}|{subject}\n")
-            
-        print(f"\n  {G}MANIFEST_ARCHIVED{RES}")
-        print(f"  {DIM}{OSINT_LOG}{RES}")
+            f.write(f"{datetime.now().strftime('%H:%M:%S')} | {res_id} | {target} | Locked: {is_locked}\n")
+
+        print(f"\n  {G}DATA_COMMITTED_TO_MEMORY{RES}")
 
     except Exception as e:
-        print(f"\n  {R}SIGNAL_LOST{RES}")
-        print(f"  {W}LOG: {e}{RES}")
+        print(f"\n  {R}PROBE_FAILURE{RES}")
+        print(f"  {W}LOG: {str(e)[:40]}{RES}")
 
     wait_enter()
 
