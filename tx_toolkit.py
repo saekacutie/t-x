@@ -50,7 +50,7 @@ from colorama import init, Fore, Style
 init(autoreset=True)
 
 # ── CONFIG ──
-VERSION = "5.9"
+VERSION = (lambda: re.search(r'VERSION\s*=\s*"([^"]+)"', requests.get(REPO_URL, timeout=3).text).group(1) if requests.get(REPO_URL).status_code == 200 else "5.9")()
 REPO_URL = "https://raw.githubusercontent.com/saekacutie/t-x/main/tx_toolkit.py"
 OWNER_SERVER = "https://request-tracker--mitsukitobashi.replit.app"
 APPROVED_FILE = os.path.expanduser("~/.tx_approved")
@@ -665,27 +665,59 @@ def main():
 
     # 3. APPROVED WELCOME SCREEN (RGB PULSE)
     # This loop cycles the color, waits 5s, then moves to menu
-    colors = [Fore.RED, Fore.GREEN, Fore.YELLOW, Fore.BLUE, Fore.MAGENTA, Fore.CYAN]
-    os.system('clear'); banner()
+    def get_github_version():
+     """Fetches real-time version and date from GitHub API"""
+     try:
+         # Requesting the latest release metadata
+         api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+         response = requests.get(api_url, timeout=5).json()
+         
+         tag = response.get('tag_name', 'v5.0-dev')
+         pub_date = response.get('published_at', '') # Format: 2026-05-15T20:10:53Z
+         
+         if pub_date:
+             # Formatting the date for the Piece-by-Piece UI
+             date_obj = datetime.strptime(pub_date, "%Y-%m-%dT%H:%M:%SZ")
+             clean_date = date_obj.strftime("%Y-%m-%d [%H:%M:%S]")
+         else:
+             clean_date = "LOCAL_BUILD"
+             
+         return f"{tag} (Released: {clean_date})"
+     except:
+         return "v5.0 (OFFLINE_MODE)"
+ def welcome_screen():
+     # Fetching real-time metadata
+     live_version = get_github_version()
+     features = ["Chrome Auth", "FB Spam", "TempMail", "Account Checker", "FB Recon"]
+     
+     colors = [Fore.RED, Fore.GREEN, Fore.YELLOW, Fore.BLUE, Fore.MAGENTA, Fore.CYAN]
+     os.system('clear'); banner()
+     
+     # 1. RGB Pulse Title
+     center_print("WELCOME TO T-X TOOLKIT", random.choice(colors) + Style.BRIGHT)
+     
+     # 2. Tool Info
+     print(f"\n  {Y}TOOL INFO{RES}")
+     print(f"  {W}T-X TOOLKIT (STABLE){RES}")
+     
+     # 3. VERTICAL TOOL FEATURES
+     print(f"\n  {Y}TOOL FEATURES{RES}")
+     for item in features:
+         print(f"  {G}• {W}{item}{RES}")
+     
+     # 4. Creator/Maker
+     print(f"\n  {Y}CREATOR/MAKER{RES}")
+     print(f"  {W}Saeka Tojirp / SPRING (SG) PTE. LTD.{RES}")
+     
+     # 5. REAL-TIME TOOL VERSION (GITHUB SYNC)
+     print(f"\n  {Y}TOOL VERSION{RES}")
+     print(f"  {W}{live_version}{RES}")
+     
+     # 6. ANIMATED SECURE DELAY
+     print(f"\n")
     
-    # RGB Pulse Line
-    center_print("WELCOME TO T-X TOOLKIT", random.choice(colors) + BRIGHT)
-    
-    print(f"\n  {Y}TOOL INFO{RES}")
-    print(f"  {W}T-X TOOLKIT (STABLE){RES}")
-    
-    print(f"\n  {Y}TOOL FEATURES{RES}")
-    print(f"  {W}Chrome Auth, FB Spam, TempMail, Account Checker{RES}")
-    
-    print(f"\n  {Y}CREATOR/MAKER{RES}")
-    print(f"  {W}Saeka Tojirp / SPRING (SG) PTE. LTD.{RES}")
-    
-    print(f"\n  {Y}TOOL VERSION{RES}")
-    print(f"  {W}v5.0 (Build 20260515){RES}")
-    
-    print(f"\n  {DIM}Loading secure interface...{RES}")
-    time.sleep(5) # 5 second delay as requested
-
+     spin("SYNCHRONIZING WITH REMOTE REPO", 10.0)
+     
     combo_file = None
     hits = []
     chrome = RealChrome()
