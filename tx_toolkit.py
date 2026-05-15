@@ -672,8 +672,8 @@ def main():
             "[1] START CHECKER", 
             "[2] FILE SETUP", 
             "[3] FACEBOOK SHARE",
-            "[4] FACEBOOK OSINT",
-            "[5] TEMPMAIL", 
+            "[4] TEAMPMAIL",
+            "[5] FACEBOOK OSINT", 
             "[6] CONTACT OWNER",
             "[7] CHECK FOR UPDATE",
             "[8] EXIT"
