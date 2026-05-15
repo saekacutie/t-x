@@ -482,19 +482,17 @@ def fb_submenu():
         elif ch == '0': break
 
    #-----CHECK----# 
-    def check_for_updates():
-        os.system('clear'); banner()
+def check_for_updates():
+    os.system('clear')
+    banner()
     center_print("CHECKING FOR SYSTEM UPDATES", Y)
     spin("Connecting to GitHub Repo...", 1.5)
     try:
-        # Fetch the remote script to check version
         response = requests.get(REPO_URL, timeout=10)
         if response.status_code == 200:
-            # Look for VERSION = "X.X" in the remote file
             remote_version_match = re.search(r'VERSION = "([^"]+)"', response.text)
             if remote_version_match:
                 remote_version = remote_version_match.group(1)
-                
                 if remote_version != VERSION:
                     print(f"\n  {G}[UPDATE FOUND]{W} Version {remote_version} is available!{RES}")
                     confirm = input(f"  {W}Update now? (y/n): {RES}").lower()
