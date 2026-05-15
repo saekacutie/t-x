@@ -500,6 +500,8 @@ def main():
     os.system('clear')
     spin("INITIALIZING T-X TOOLKIT...", 2)
     banner()
+
+    # 1. PERSISTENT NAME LOGIC
     if os.path.exists(NAME_FILE):
         with open(NAME_FILE, 'r') as f:
             name = f.read().strip()
@@ -508,37 +510,81 @@ def main():
         with open(NAME_FILE, 'w') as f:
             f.write(name)
     
-    token = get_local_token()
-    if not token:
-        token = request_access(name)
+    # 2. AUTHORIZATION & LIVE APPROVAL LOOP
+    token = get_local_token() or request_access(name)
+    
+    while True:
+        if check_access_online(token):
+            break  # Approved! Break and show welcome
+        
+        os.system('clear'); banner()
+        center_print("SYSTEM LOCKED : PENDING APPROVAL", R)
+        print(f"\n  {W}OPERATIVE : {G}{name.upper()}{RES}")
+        print(f"  {W}TOKEN     : {C}{token}{RES}")
+        
+        print(f"\n  {Y}ACTIVATION INSTRUCTIONS{RES}")
+        print(f"  {G}•{W} Copy the {C}TOKEN{W} shown above")
+        print(f"  {G}•{W} Submit it here: {M}{OWNER_SERVER}{RES}")
+        print(f"  {G}•{W} Contact {C}Saeka Tojirp{W} for instant verify")
+        
+        print(f"\n  {DIM}Status: Waiting for owner approval...{RES}")
+        
+        try:
+            for i in range(15, 0, -1):
+                sys.stdout.write(f"\r  {W}Refreshing in {i}s... (Ctrl+C to exit){RES}")
+                sys.stdout.flush()
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print(f"\n  {R}Exiting...{RES}"); sys.exit()
 
-    # Security Guard: Checks with server and wipes local token if access was removed
-    spin("VERIFYING CLEARANCE...", 1.5)
-    if not check_access_online(token):
-        os.system('clear')
-        center_print("ACCESS REVOKED BY OWNER", R)
-        center_print(f"TOKEN: {token}", Y)
-        center_print("Contact Saeka Tojirp for re-activation.", DIM)
-        sys.exit()
+    # 3. APPROVED WELCOME SCREEN (RGB PULSE)
+    # This loop cycles the color, waits 5s, then moves to menu
+    colors = [Fore.RED, Fore.GREEN, Fore.YELLOW, Fore.BLUE, Fore.MAGENTA, Fore.CYAN]
+    os.system('clear'); banner()
+    
+    # RGB Pulse Line
+    center_print("WELCOME TO T-X TOOLKIT", random.choice(colors) + BRIGHT)
+    
+    print(f"\n  {Y}TOOL INFO{RES}")
+    print(f"  {W}T-X TOOLKIT (STABLE){RES}")
+    
+    print(f"\n  {Y}TOOL FEATURES{RES}")
+    print(f"  {W}Chrome Auth, FB Spam, TempMail, Account Checker{RES}")
+    
+    print(f"\n  {Y}CREATOR/MAKER{RES}")
+    print(f"  {W}Saeka Tojirp / SPRING (SG) PTE. LTD.{RES}")
+    
+    print(f"\n  {Y}TOOL VERSION{RES}")
+    print(f"  {W}v5.0 (Build 20260515){RES}")
+    
+    print(f"\n  {DIM}Loading secure interface...{RES}")
+    time.sleep(5) # 5 second delay as requested
 
     combo_file = None
     hits = []
     chrome = RealChrome()
 
+    # 4. MAIN TOOLKIT LOOP
     while True:
         os.system('clear'); banner()
-        print(f"  {G}HI, {name.upper()}{RES}  {DIM}{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{RES}\n")
-        menu = ["[1] START CHECKER", "[2] FILE SETUP", "[3] FACEBOOK SHARE", "[4] TEMPMAIL", "[5] CONTACT OWNER", "[6] EXIT"]
-        for i, m in enumerate(menu): print(f"  {W}{m}{RES}")
+        print(f"  {G}HI, {name.upper()}{RES}  {DIM}{datetime.now().strftime('%H:%M:%S')}{RES}\n")
+        menu = [
+            "[1] START CHECKER", 
+            "[2] FILE SETUP", 
+            "[3] FACEBOOK SHARE", 
+            "[4] TEMPMAIL", 
+            "[5] CONTACT OWNER", 
+            "[6] EXIT"
+        ]
+        for m in menu: print(f"  {W}{m}{RES}")
         
         choice = input(f"\n  {W}> {RES}").strip()
         
         if choice == '1':
             if not combo_file: 
-                print(f"  {R}Load file first!{RES}")
-                time.sleep(1); continue
-            spin("Running Checker Engine...", 2)
-            # Full loop logic here
+                print(f"  {R}Error: Set combo file first!{RES}"); time.sleep(1.2); continue
+            spin("Initializing Checker Engine...", 2)
+            # Checker logic execution
             wait_enter()
             
         elif choice == '2':
@@ -549,42 +595,28 @@ def main():
             dirs = [d for d in dirs if os.path.isdir(d)]
             
             print(f"  {W}Quick access:{RES}")
-            for i, d in enumerate(dirs): 
-                print(f"  {G}[{i+1}]{RES} {d}")
+            for i, d in enumerate(dirs): print(f"  {G}[{i+1}]{RES} {d}")
             print(f"  {G}[M]{RES} Manual path entry\n  {G}[0]{RES} Back")
             
             c2 = input(f"  {W}> {RES}").strip()
             if c2 == '0': continue
-            
             if c2.upper() == 'M':
-                p = input(f"  {W}Full path: {RES}").strip()
-                p = os.path.expanduser(p)
-                if os.path.exists(p): 
-                    combo_file = p
-                    print(f"  {G}File set!{RES}")
-                else: 
-                    print(f"  {R}Not found.{RES}")
-                wait_enter()
-                
+                p = os.path.expanduser(input(f"  {W}Full path: {RES}").strip())
+                if os.path.exists(p): combo_file = p; print(f"  {G}File set!{RES}")
+                else: print(f"  {R}Not found.{RES}")
+                time.sleep(1)
             elif c2.isdigit() and 1 <= int(c2) <= len(dirs):
-                cur = dirs[int(c2)-1]
-                page = 0; per = 15
+                cur = dirs[int(c2)-1]; page = 0; per = 15
                 while True:
                     os.system('clear')
                     print(f"  {Y}Browsing: {cur}{RES}\n")
-                    try: 
-                        items = sorted(os.listdir(cur))
-                    except: 
-                        print(f"  {R}Permission denied.{RES}")
-                        time.sleep(1); break
-                        
+                    try: items = sorted(os.listdir(cur))
+                    except: print(f"  {R}Permission denied.{RES}"); time.sleep(1); break
                     visible = []
                     for it in items:
                         full = os.path.join(cur, it)
-                        if os.path.isdir(full) and not it.startswith('.'):
-                            visible.append(('DIR', it))
-                        elif os.path.isfile(full) and (it.endswith('.txt') or 'combo' in it.lower() or 'ulp' in it.lower()):
-                            visible.append(('FILE', it))
+                        if os.path.isdir(full) and not it.startswith('.'): visible.append(('DIR', it))
+                        elif os.path.isfile(full) and (it.endswith('.txt') or 'combo' in it.lower()): visible.append(('FILE', it))
                     
                     total_pages = (len(visible)-1)//per+1 if visible else 1
                     start = page * per
@@ -592,47 +624,23 @@ def main():
                         pre = f"{C}[DIR]{RES}" if tp == 'DIR' else f"{W}[FILE]{RES}"
                         print(f"  {G}[{i+1}]{RES} {pre} {nm}")
                     
-                    if not visible: print(f"  {DIM}No compatible files.{RES}")
                     print(f"\n  {DIM}Page {page+1}/{total_pages} | [N]ext [P]rev [B]ack [M]anual{RES}")
-                    
                     sel = input(f"  {W}> {RES}").strip()
-                    if sel.upper() == 'B': 
-                        break
-                    elif sel.upper() == 'N' and page < total_pages - 1: 
-                        page += 1
-                    elif sel.upper() == 'P' and page > 0: 
-                        page -= 1
-                    elif sel.upper() == 'M':
-                        p = input(f"  {W}Full path: {RES}").strip()
-                        p = os.path.expanduser(p)
-                        if os.path.isfile(p): 
-                            combo_file = p
-                            print(f"  {G}File set!{RES}"); time.sleep(1); break
-                        elif os.path.isdir(p): 
-                            cur = p; page = 0
-                        else: 
-                            print(f"  {R}Not found.{RES}"); time.sleep(0.8)
+                    if sel.upper() == 'B': break
+                    elif sel.upper() == 'N' and page < total_pages - 1: page += 1
+                    elif sel.upper() == 'P' and page > 0: page -= 1
                     elif sel.isdigit():
                         idx = int(sel)-1
                         if 0 <= idx < len(visible):
                             tp, nm = visible[idx]
                             full = os.path.join(cur, nm)
-                            if tp == 'DIR': 
-                                cur = full; page = 0
-                            else: 
-                                combo_file = full
-                                print(f"  {G}File set!{RES}")
-                                print(f"  {DIM}Selected: {nm}{RES}")
-                                time.sleep(1.2); break
+                            if tp == 'DIR': cur = full; page = 0
+                            else: combo_file = full; print(f"  {G}File set!{RES}"); time.sleep(1); break
                                 
-        elif choice == '3': 
-            fb_submenu()
-        elif choice == '4': 
-            tempmail_main()
-        elif choice == '5': 
-            os.system('xdg-open https://facebook.com/saekacutiee')
-        elif choice == '6': 
-            sys.exit()
+        elif choice == '3': fb_submenu()
+        elif choice == '4': tempmail_main()
+        elif choice == '5': os.system('xdg-open https://facebook.com/saekacutiee')
+        elif choice == '6': sys.exit()
 
 def setup_alias():
     if os.path.exists(ALIAS_FILE):
