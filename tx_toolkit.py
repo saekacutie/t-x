@@ -483,7 +483,7 @@ def fb_submenu():
 
    #-----CHECK----# 
     def check_for_updates():
-    os.system('clear'); banner()
+        os.system('clear'); banner()
     center_print("CHECKING FOR SYSTEM UPDATES", Y)
     spin("Connecting to GitHub Repo...", 1.5)
     try:
