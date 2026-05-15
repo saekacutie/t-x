@@ -70,27 +70,21 @@ def tempmail_main():
         "Copy Email Address",
         "Back to Main Menu",
     ]
-    selected = 0
     while True:
-        os.system('clear')
-        print(f"  {Y}{RES}TEMP MAIL GENERATOR{RES}")
-        if current_temp_email:
-            print(f"  {C}Active: {current_temp_email}{RES}")
-        print()
-        for i, option in enumerate(options):
-            if i == selected:
-                print(f"  {G}{RES}▸ {option}{RES}")
-            else:
-                print(f"  {DIM}  {option}{RES}")
-        key = get_key()
-        if key == 'UP' and selected > 0: selected -= 1
-        elif key == 'DOWN' and selected < len(options) - 1: selected += 1
-        elif key == 'ENTER':
-            if selected == 0: generate_temp_email()
-            elif selected == 1: view_live_inbox()
-            elif selected == 2: copy_tempmail()
-            elif selected == 3: return
-
+    os.system('clear')
+    print(f"  {Y}TEMP MAIL GENERATOR{RES}")
+    if current_temp_email:
+        print(f"  {C}Active: {current_temp_email}{RES}")
+    print()
+    for i, option in enumerate(options):
+        print(f"  {G}[{i+1}]{RES} {option}")
+    print(f"  {G}[0]{RES} Back")
+    ch = input(f"  {W}> {RES}").strip()
+    if ch == '1': generate_temp_email()
+    elif ch == '2': view_live_inbox()
+    elif ch == '3': copy_tempmail()
+    elif ch == '0': return
+        
 def generate_temp_email():
     global current_temp_email, current_temp_service, temp_mail_session
     os.system('clear'); banner()
