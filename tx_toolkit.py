@@ -496,47 +496,58 @@ def fb_submenu():
    #-----CHECK----# 
 def check_for_updates():
     os.system('clear'); banner()
-    center_print("FETCHING SYSTEM UPDATE", Y)
+    center_print("CHECKING FOR UPDATES", Y)
     
-    # Cache buster ensures it doesn't download an old version from GitHub cache
-    target_url = REPO_URL + f"?t={int(time.time())}"
+    # 1. Setup API and Raw URL
+    # We use the Commits API to see the REAL-TIME "Last Edited" data
+    api_url = "https://api.github.com/repos/saekacutie/t-x/commits/main?path=tx_toolkit.py"
+    raw_url = REPO_URL + f"?cache_bust={int(time.time())}"
     
     try:
-        spin("Connecting to Secure Repo...", 1.5)
-        response = requests.get(target_url, timeout=10)
+        # Step A: Check for the latest edit/commit
+        spin("Fetching Node Metadata", 1.5)
+        api_res = requests.get(api_url, timeout=10).json()
+        last_edit = api_res['commit']['author']['date']
+        clean_date = datetime.strptime(last_edit, "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%d [%H:%M:%S]")
+        
+        # Step B: Fetch the raw code to check VERSION variable
+        spin("Reading Remote Manifest", 1.5)
+        response = requests.get(raw_url, timeout=10)
         
         if response.status_code == 200:
-            # Look for the VERSION line in the raw text
-            remote_version_match = re.search(r'VERSION\s*=\s*"([^"]+)"', response.text)
+            remote_v_match = re.search(r'VERSION\s*=\s*"([^"]+)"', response.text)
             
-            if remote_version_match:
-                remote_version = remote_version_match.group(1)
+            if remote_v_match:
+                remote_version = remote_v_match.group(1)
                 
+                # Compare Piece-by-Piece
                 if remote_version != VERSION:
-                    print(f"\n  {G}[UPDATE AVAILABLE]{W} New Version: {remote_version}")
-                    print(f"  {DIM}Current Version: {VERSION}{RES}")
+                    print(f"\n  {G}[SYSTEM UPDATE DETECTED]{RES}")
+                    print(f"  {W}Latest Version : {G}{remote_version}{RES}")
+                    print(f"  {W}Last Edited    : {DIM}{clean_date}{RES}")
+                    print(f"  {W}Current Status : {R}OUTDATED (v{VERSION}){RES}")
                     
-                    confirm = input(f"\n  {W}Install update? (y/n): {RES}").lower()
+                    confirm = input(f"\n  {W}Apply Update? (y/n) > {RES}").lower()
                     if confirm == 'y':
-                        spin("Downloading & Patching...", 2)
-                        # Overwrite the current script file
+                        spin("Downloading & Overwriting Local Node", 3)
                         with open(__file__, 'w', encoding='utf-8') as f:
                             f.write(response.text)
                         
-                        print(f"  {G}[SUCCESS]{W} System updated to v{remote_version}!{RES}")
+                        print(f"  {G}[SUCCESS]{W} System patched to v{remote_version}!{RES}")
                         time.sleep(2)
-                        # Restart the script
                         os.execv(sys.executable, ['python3'] + sys.argv)
                 else:
-                    print(f"\n  {G}[OK]{W} You are already on the latest version (v{VERSION}).{RES}")
-                    time.sleep(2)
+                    print(f"\n  {G}[STABLE]{W} System is synced with GitHub.{RES}")
+                    print(f"  {W}Version   : {G}{VERSION}{RES}")
+                    print(f"  {W}Last Sync : {DIM}{clean_date}{RES}")
+                    time.sleep(3)
             else:
-                print(f"  {R}[!] Error: Could not find version info in repo.{RES}")
+                print(f"  {R}[!] CRITICAL: Version string not found in remote source.{RES}")
         else:
-            print(f"  {R}[!] Fetch failed. Status: {response.status_code}{RES}")
+            print(f"  {R}[!] ACCESS_DENIED: GitHub returned {response.status_code}{RES}")
             
     except Exception as e:
-        print(f"  {R}[!] Connection error: {e}{RES}")
+        print(f"  {R}[!] CONNECTION_LOST: {str(e)[:40]}{RES}")
     
     wait_enter()
                 
