@@ -483,37 +483,51 @@ def fb_submenu():
 
    #-----CHECK----# 
 def check_for_updates():
-    os.system('clear')
-    banner()
-    center_print("CHECKING FOR SYSTEM UPDATES", Y)
-    spin("Connecting to GitHub Repo...", 1.5)
+    os.system('clear'); banner()
+    center_print("FETCHING SYSTEM UPDATE", Y)
+    
+    # Cache buster ensures it doesn't download an old version from GitHub cache
+    target_url = REPO_URL + f"?t={int(time.time())}"
+    
     try:
-        response = requests.get(REPO_URL, timeout=10)
+        spin("Connecting to Secure Repo...", 1.5)
+        response = requests.get(target_url, timeout=10)
+        
         if response.status_code == 200:
-            remote_version_match = re.search(r'VERSION = "([^"]+)"', response.text)
+            # Look for the VERSION line in the raw text
+            remote_version_match = re.search(r'VERSION\s*=\s*"([^"]+)"', response.text)
+            
             if remote_version_match:
                 remote_version = remote_version_match.group(1)
+                
                 if remote_version != VERSION:
-                    print(f"\n  {G}[UPDATE FOUND]{W} Version {remote_version} is available!{RES}")
-                    confirm = input(f"  {W}Update now? (y/n): {RES}").lower()
+                    print(f"\n  {G}[UPDATE AVAILABLE]{W} New Version: {remote_version}")
+                    print(f"  {DIM}Current Version: {VERSION}{RES}")
+                    
+                    confirm = input(f"\n  {W}Install update? (y/n): {RES}").lower()
                     if confirm == 'y':
-                        spin("Downloading update...", 2)
-                        with open(__file__, 'w') as f:
+                        spin("Downloading & Patching...", 2)
+                        # Overwrite the current script file
+                        with open(__file__, 'w', encoding='utf-8') as f:
                             f.write(response.text)
-                        print(f"  {G}[SUCCESS]{W} Update installed! Restarting...{RES}")
+                        
+                        print(f"  {G}[SUCCESS]{W} System updated to v{remote_version}!{RES}")
                         time.sleep(2)
+                        # Restart the script
                         os.execv(sys.executable, ['python3'] + sys.argv)
                 else:
-                    print(f"\n  {G}[OK]{W} You are running the latest version (v{VERSION}).{RES}")
-                    time.sleep(1.5)
+                    print(f"\n  {G}[OK]{W} You are already on the latest version (v{VERSION}).{RES}")
+                    time.sleep(2)
+            else:
+                print(f"  {R}[!] Error: Could not find version info in repo.{RES}")
         else:
-            print(f"  {R}[!] Could not connect to update server.{RES}")
-            time.sleep(1.5)
+            print(f"  {R}[!] Fetch failed. Status: {response.status_code}{RES}")
+            
     except Exception as e:
-        print(f"  {R}[!] Update check failed: {e}{RES}")
-        time.sleep(2)
-        
-        
+        print(f"  {R}[!] Connection error: {e}{RES}")
+    
+    wait_enter()
+                
 # ── REAL CHROME ENGINE ──
 class RealChrome:
     def __init__(self):
