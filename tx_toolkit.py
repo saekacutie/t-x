@@ -677,8 +677,7 @@ def main():
     # 3. APPROVED WELCOME SCREEN (RGB PULSE)
     # This loop cycles the color, waits 5s, then moves to menu
     def get_github_version():
-     """Fetches real-time version and date from GitHub API"""
-     try:
+        try:
          # Requesting the latest release metadata
          api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
          response = requests.get(api_url, timeout=5).json()
