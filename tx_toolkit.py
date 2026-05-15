@@ -82,7 +82,7 @@ def tempmail_main():
                 print(f"  {G}{RES}▸ {option}{RES}")
             else:
                 print(f"  {DIM}  {option}{RES}")
-        key = get_token()
+        key = get_key()
         if key == 'UP' and selected > 0: selected -= 1
         elif key == 'DOWN' and selected < len(options) - 1: selected += 1
         elif key == 'ENTER':
