@@ -56,6 +56,7 @@ TOKEN_FILE = os.path.expanduser("~/.tx_token")
 ALIAS_FILE = os.path.expanduser("~/.bashrc")
 CHROME = "/data/data/com.termux/files/usr/bin/chromium-browser"
 FB_CODE_FILE = os.path.expanduser("~/.tx_fbcode")
+NAME_FILE= os.path.expanduser("~/tx_name")
 
 R = Fore.RED; G = Fore.GREEN; Y = Fore.YELLOW; C = Fore.CYAN; W = Fore.WHITE; M = Fore.MAGENTA
 DIM = Style.DIM; BRIGHT = Style.BRIGHT; RES = Style.RESET_ALL
