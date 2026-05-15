@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-T-X TOOLKIT v5.0 – Real Chrome Login · Facebook Spam Share · TempMail · Contact Owner
+T-X TOOLKIT
 Created by Saeka Tojirp
 Usage : tx
 """
