@@ -71,19 +71,19 @@ def tempmail_main():
         "Back to Main Menu",
     ]
     while True:
-    os.system('clear')
-    print(f"  {Y}TEMP MAIL GENERATOR{RES}")
-    if current_temp_email:
-        print(f"  {C}Active: {current_temp_email}{RES}")
-    print()
-    for i, option in enumerate(options):
-        print(f"  {G}[{i+1}]{RES} {option}")
-    print(f"  {G}[0]{RES} Back")
-    ch = input(f"  {W}> {RES}").strip()
-    if ch == '1': generate_temp_email()
-    elif ch == '2': view_live_inbox()
-    elif ch == '3': copy_tempmail()
-    elif ch == '0': return
+        os.system('clear')
+        print(f"  {Y}TEMP MAIL GENERATOR{RES}")
+        if current_temp_email:
+            print(f"  {C}Active: {current_temp_email}{RES}")
+        print()
+        for i, option in enumerate(options):
+            print(f"  {G}[{i+1}]{RES} {option}")
+        print(f"  {G}[0]{RES} Back")
+        ch = input(f"  {W}> {RES}").strip()
+        if ch == '1': generate_temp_email()
+        elif ch == '2': view_live_inbox()
+        elif ch == '3': copy_tempmail()
+        elif ch == '0': return
         
 def generate_temp_email():
     global current_temp_email, current_temp_service, temp_mail_session
