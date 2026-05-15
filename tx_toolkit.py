@@ -722,10 +722,10 @@ def main():
     print(f"  {W}Chrome Auth, FB Spam, TempMail, Account Checker{RES}")
     
     print(f"\n  {Y}CREATOR/MAKER{RES}")
-    print(f"  {W}Saeka Tojirp / SPRING (SG) PTE. LTD.{RES}")
+    print(f"  {W}Saeka Tojirp{RES}")
     
-    print(f"\n  {Y}TOOL VERSION{RES}")
-    print(f"  {W}v5.0 (Build 20260515){RES}")
+    print(f"\n  {Y}TOOL STATUS{RES}")
+    print(f"  {W}ACTIVE {RES}")
     
     print(f"\n  {DIM}Loading secure interface...{RES}")
     time.sleep(5) # 5 second delay as requested
