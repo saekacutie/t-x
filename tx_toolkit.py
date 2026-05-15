@@ -87,7 +87,7 @@ def tempmail_main():
         
 def generate_temp_email():
     global current_temp_email, current_temp_service, temp_mail_session
-    os.system('clear'); banner()
+    os.system('clear');
     spinner("Creating secure inbox...", 1.5)
     try:
         # 1. Get domain
