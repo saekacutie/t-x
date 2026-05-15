@@ -73,7 +73,6 @@ def tempmail_main():
     selected = 0
     while True:
         os.system('clear')
-        banner()
         print(f"  {Y}{BOLD}TEMP MAIL GENERATOR{RES}")
         if current_temp_email:
             print(f"  {C}Active: {current_temp_email}{RES}")
