@@ -73,13 +73,13 @@ def tempmail_main():
     selected = 0
     while True:
         os.system('clear')
-        print(f"  {Y}{BOLD}TEMP MAIL GENERATOR{RES}")
+        print(f"  {Y}{RES}TEMP MAIL GENERATOR{RES}")
         if current_temp_email:
             print(f"  {C}Active: {current_temp_email}{RES}")
         print()
         for i, option in enumerate(options):
             if i == selected:
-                print(f"  {G}{BOLD}▸ {option}{RES}")
+                print(f"  {G}{RES}▸ {option}{RES}")
             else:
                 print(f"  {DIM}  {option}{RES}")
         key = get_key()
