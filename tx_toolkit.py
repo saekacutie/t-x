@@ -478,7 +478,7 @@ def fb_submenu():
         elif ch == '3':
             FB_SHARE_SPEED = float(input(f"  {W}Interval (sec): {RES}") or "1")
         elif ch == '0': break
-
+        
 # ── REAL CHROME ENGINE ──
 class RealChrome:
     def __init__(self):
@@ -703,8 +703,9 @@ def main():
                             if tp == 'DIR': cur = full; page = 0
                             else: combo_file = full; print(f"  {G}File set!{RES}"); time.sleep(1); break
                                 
-        elif choice == '3': fb_submenu()
-        elif choice == '4': tempmail_main()
+        elif choice == '2': fb_submenu()
+        elif choice == '3': tempmail_main()
+        elif choice == '4':  fb_osint_deep_scan()
         elif choice == '5': os.system('xdg-open https://facebook.com/saekacutiee')
         elif choice == '6': sys.exit()
 
