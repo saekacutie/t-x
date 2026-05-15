@@ -50,7 +50,7 @@ from colorama import init, Fore, Style
 init(autoreset=True)
 
 # ── CONFIG ──
-VERSION = "5.2"
+VERSION = "5.6"
 REPO_URL = "https://raw.githubusercontent.com/saekacutie/t-x/main/tx_toolkit.py"
 OWNER_SERVER = "https://request-tracker--mitsukitobashi.replit.app"
 APPROVED_FILE = os.path.expanduser("~/.tx_approved")
@@ -277,64 +277,66 @@ def fb_submenu():
 #---FACEBOOK OSINT ----#
 def fb_osint_deep_scan():
     os.system('clear'); banner()
-    print(f"  {M}FACEBOOK DEEP OSINT SCANNER v2.0{RES}")
-    target_url = input(f"\n  {W}Enter Profile URL/ID: {RES}").strip()
-    if not target_url: return
-
-    spin("Initializing Deep Scan Engine...", 2)
+    print(f"  {Y}SIGNAL DISCOVERY ENGINE{RES}")
     
-    # 1. Extract Profile ID
-    profile_id = "Unknown"
-    if "profile.php?id=" in target_url:
-        profile_id = target_url.split("id=")[1].split("&")[0]
-    else:
-        try:
-            r = requests.get(target_url, headers={"User-Agent": random.choice(USER_AGENTS)})
-            id_match = re.search(r'"entity_id":"(\d+)"', r.text) or re.search(r'"userID":"(\d+)"', r.text)
-            if id_match: profile_id = id_match.group(1)
-        except: pass
+    query = input(f"\n  {W}QUERY > {RES}").strip()
+    if not query: return
 
-    # 2. Scrape Public Metadata
-    os.system('clear'); banner()
-    print(f"  {G}[+] TARGET IDENTIFIED: {W}{profile_id}{RES}")
-    print(f"  {Y}── EXECUTING DEEP SCAN ──{RES}\n")
-
-    results = {
-        "Account ID": profile_id,
-        "Profile Link": target_url,
-        "Scan Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "Status": "Analyzing Metadata..."
-    }
-
-    # Simulation of Deep API Analysis (Grabbing Meta-Tags)
-    spin("Extracting Account Creation Range...", 1.5)
-    # FB IDs are sequential. Older IDs are shorter.
-    creation_estimate = "Pre-2010" if len(profile_id) <= 10 else "2015-2024"
+    spin("INTERROGATING GRAPH NODES...", 1.2)
     
-    spin("Scanning for Linked Phone/Email Leaks...", 2)
-    spin("Reconstructing Timeline Activity...", 1.5)
+    try:
+        # Extract Identifier
+        user_key = query.split("facebook.com/")[-1].replace("/", "").split("?")[0]
+        
+        h = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}
+        raw_html = requests.get(f"https://www.facebook.com/{user_key}", headers=h, timeout=10).text
 
-    # Output Detailed Results
-    print(f"  {C}BASIC INFO{RES}")
-    print(f"  {W}• ID: {G}{profile_id}")
-    print(f"  {W}• Type: {G}Personal Profile")
-    print(f"  {W}• Creation Est: {G}{creation_estimate}{RES}")
+        # ── NODE RESOLUTION ──
+        # Extracting the 3 critical Meta identifiers
+        uid = re.search(r'"userID":"(\d+)"', raw_html) or re.search(r'"entity_id":"(\d+)"', raw_html)
+        target_id = uid.group(1) if uid else "NULL_NODE"
+        
+        # Name & Status
+        title = re.search(r'<title>(.*?)</title>', raw_html)
+        subject = title.group(1).split("|")[0].strip() if title else "UNKNOWN_SUBJECT"
 
-    print(f"\n  {C}DEEP METADATA{RES}")
-    print(f"  {W}• Last Online: {R}HIDDEN (Requires Active Session){RES}")
-    print(f"  {W}• Account Created: {G}Estimated {creation_estimate}{RES}")
-    print(f"  {W}• Security Level: {Y}High (Encrypted API){RES}")
-    print(f"  {W}• Linked Data: {G}Scanning Database...{RES}")
-    
-    print(f"\n  {C}EXTERNAL CONNECTIONS{RES}")
-    print(f"  {W}• Instagram Link: {G}Checking...{RES}")
-    print(f"  {W}• WhatsApp Link: {G}None Found{RES}")
-    
-    # Save Log
-    with open(OSINT_LOG, "a") as f:
-        f.write(json.dumps(results) + "\n")
-    
-    print(f"\n  {G}[SUCCESS] Scan saved to {OSINT_LOG}{RES}")
+        # ── EPOCH TIERING (Account Age Intelligence) ──
+        epoch = "UNKNOWN"
+        if target_id.isdigit():
+            v = int(target_id)
+            if v < 100000000: epoch = "ALPHA_TIER (2004-2006)"
+            elif v < 1000000000: epoch = "BETA_TIER (2007-2009)"
+            elif v > 100000000000000: epoch = "DELTA_TIER (2011-2024)"
+
+        # ── RAW DATA REPORT ──
+        os.system('clear'); banner()
+        
+        print(f"  {G}SIGNAL_RESOLVED{RES}")
+        print(f"  {W}IDENTIFIER  {G}{subject}{RES}")
+        print(f"  {W}UID_NODE    {G}{target_id}{RES}")
+        print(f"  {W}EPOCH       {Y}{epoch}{RES}")
+        
+        print(f"\n  {C}TECHNICAL_MANIFEST{RES}")
+        print(f"  {W}VANITY_REF  {W}fb.com/{user_key}{RES}")
+        print(f"  {W}ENTITY_TYPE {W}META_USER_OBJECT{RES}")
+        print(f"  {W}MD5_SIGN    {DIM}{hashlib.md5(target_id.encode()).hexdigest()}{RES}")
+        
+        print(f"\n  {C}ECOSYSTEM_FINGERPRINT{RES}")
+        print(f"  {W}MESSENGER   {W}m.me/{target_id}{RES}")
+        print(f"  {W}INSTAGRAM   {W}ig.com/{user_key}{RES}")
+        print(f"  {W}GRAPH_PATH  {DIM}fb.com/search/top?q={target_id}{RES}")
+        
+        # Archiving
+        with open(OSINT_LOG, "a") as f:
+            f.write(f"{datetime.now()}|{target_id}|{subject}\n")
+            
+        print(f"\n  {G}MANIFEST_ARCHIVED{RES}")
+        print(f"  {DIM}{OSINT_LOG}{RES}")
+
+    except Exception as e:
+        print(f"\n  {R}SIGNAL_LOST{RES}")
+        print(f"  {W}LOG: {e}{RES}")
+
     wait_enter()
 
 # ── TEMPMAIL (MAIL.TM) ──
