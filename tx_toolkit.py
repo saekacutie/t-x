@@ -531,12 +531,91 @@ def main():
             spin("Running Checker Engine...", 2)
             # Full loop logic here (omitted for space but implied)
             wait_enter()
-        elif choice == '2':
-            path = input(f"  {W}Path: {RES}").strip()
-            if os.path.exists(path):
-                combo_file = path; spin("Indexing...", 1); print(f"  {G}Loaded.{RES}")
-            else: print(f"  {R}Not found.{RES}")
-            time.sleep(1)
+                elif choice == '2':
+            os.system('clear')
+            print(f"  {Y}BROWSE FOR COMBO FILE{RES}\n")
+            # Setup directories
+            dirs = [os.path.expanduser("~"), os.path.expanduser("~/downloads"),
+                    "/sdcard", "/storage/emulated/0", "/storage/emulated/0/Download"]
+            dirs = [d for d in dirs if os.path.isdir(d)]
+            
+            print(f"  {W}Quick access:{RES}")
+            for i, d in enumerate(dirs): 
+                print(f"  {G}[{i+1}]{RES} {d}")
+            print(f"  {G}[M]{RES} Manual path entry\n  {G}[0]{RES} Back")
+            
+            c2 = input(f"  {W}> {RES}").strip()
+            if c2 == '0': continue
+            
+            if c2.upper() == 'M':
+                p = input(f"  {W}Full path: {RES}").strip()
+                p = os.path.expanduser(p)
+                if os.path.exists(p): 
+                    combo_file = p
+                    print(f"  {G}File set!{RES}")
+                else: 
+                    print(f"  {R}Not found.{RES}")
+                wait_enter()
+                
+            elif c2.isdigit() and 1 <= int(c2) <= len(dirs):
+                cur = dirs[int(c2)-1]
+                page = 0; per = 15
+                while True:
+                    os.system('clear')
+                    print(f"  {Y}Browsing: {cur}{RES}\n")
+                    try: 
+                        items = sorted(os.listdir(cur))
+                    except: 
+                        print(f"  {R}Permission denied.{RES}")
+                        time.sleep(1); break
+                        
+                    visible = []
+                    for it in items:
+                        full = os.path.join(cur, it)
+                        if os.path.isdir(full) and not it.startswith('.'):
+                            visible.append(('DIR', it))
+                        elif os.path.isfile(full) and (it.endswith('.txt') or 'combo' in it.lower() or 'ulp' in it.lower()):
+                            visible.append(('FILE', it))
+                    
+                    total_pages = (len(visible)-1)//per+1 if visible else 1
+                    start = page * per
+                    for i, (tp, nm) in enumerate(visible[start:start+per], start):
+                        pre = f"{C}[DIR]{RES}" if tp == 'DIR' else f"{W}[FILE]{RES}"
+                        print(f"  {G}[{i+1}]{RES} {pre} {nm}")
+                    
+                    if not visible: print(f"  {DIM}No compatible files.{RES}")
+                    print(f"\n  {DIM}Page {page+1}/{total_pages} | [N]ext [P]rev [B]ack [M]anual{RES}")
+                    
+                    sel = input(f"  {W}> {RES}").strip()
+                    if sel.upper() == 'B': 
+                        break
+                    elif sel.upper() == 'N' and page < total_pages - 1: 
+                        page += 1
+                    elif sel.upper() == 'P' and page > 0: 
+                        page -= 1
+                    elif sel.upper() == 'M':
+                        p = input(f"  {W}Full path: {RES}").strip()
+                        p = os.path.expanduser(p)
+                        if os.path.isfile(p): 
+                            combo_file = p
+                            print(f"  {G}File set!{RES}"); time.sleep(1); break
+                        elif os.path.isdir(p): 
+                            cur = p; page = 0
+                        else: 
+                            print(f"  {R}Not found.{RES}"); time.sleep(0.8)
+                    elif sel.isdigit():
+                        idx = int(sel)-1
+                        if 0 <= idx < len(visible):
+                            tp, nm = visible[idx]
+                            full = os.path.join(cur, nm)
+                            if tp == 'DIR': 
+                                cur = full; page = 0
+                            else: 
+                                combo_file = full
+                                print(f"  {G}File set!{RES}")
+                                print(f"  {DIM}Selected: {nm}{RES}")
+                                time.sleep(1.2); break
+
         elif choice == '3': fb_submenu()
         elif choice == '4': tempmail_main()
         elif choice == '5': os.system('xdg-open https://facebook.com/saekacutiee')
