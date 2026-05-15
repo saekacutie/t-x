@@ -500,7 +500,13 @@ def main():
     os.system('clear')
     spin("INITIALIZING T-X TOOLKIT...", 2)
     banner()
-    name = input(f"  {W}OPERATIVE NAME: {RES}").strip() or "User"
+    if os.path.exists(NAME_FILE):
+        with open(NAME_FILE, 'r') as f:
+            name = f.read().strip()
+    else:
+        name = input(f"  {W}OPERATIVE NAME: {RES}").strip() or "User"
+        with open(NAME_FILE, 'w') as f:
+            f.write(name)
     
     token = get_local_token()
     if not token:
