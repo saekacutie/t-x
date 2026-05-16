@@ -683,9 +683,7 @@ def check_for_updates():
                  self.proc.terminate()
                  shutil.rmtree(self.profile, ignore_errors=True)
          return res
- # ── ENGINE INITIALIZATION ──
- chrome = RealChrome()
-
+         
 # ── HTTP FALLBACK: SIGNAL RECOVERY ENGINE ──
 def http_login(url, email, password):
     res = {'link': url, 'email': email, 'pass': password, 'active': False, 'info': ''}
