@@ -793,7 +793,7 @@ def main():
         
         choice = input(f"\n  {W}> {RES}").strip()
         
-                if choice == '1':
+        if choice == '1':
             # 1. NODE VALIDATION & SOURCE INTERROGATION
             if not combo_file or not os.path.exists(combo_file):
                 print(f"  {R}Set file path first.{RES}"); time.sleep(1); continue
