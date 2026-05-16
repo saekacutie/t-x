@@ -519,6 +519,7 @@ def fb_submenu():
 
    #-----CHECK----# 
 def check_for_updates():
+    """Executes Forensic Hash-Based Update Detection"""
     os.system('clear'); banner()
     center_print("FETCHING SYSTEM UPDATE", Y)
     
@@ -530,37 +531,53 @@ def check_for_updates():
         response = requests.get(target_url, timeout=10)
         
         if response.status_code == 200:
-            # Look for the VERSION line in the raw text
-            remote_version_match = re.search(r'VERSION\s*=\s*"([^"]+)"', response.text)
+            remote_code = response.text
             
-            if remote_version_match:
-                remote_version = remote_version_match.group(1)
+            # 1. SILENT FORENSIC HASH (Real Detect)
+            # Detects any character change in the repo without displaying the hash
+            local_hash = hashlib.sha256(open(__file__, 'rb').read()).hexdigest()
+            remote_hash = hashlib.sha256(remote_code.encode('utf-8')).hexdigest()
+
+            # 2. Extract Remote Version for UI Display
+            remote_v_match = re.search(r'VERSION\s*=\s*"([^"]+)"', remote_code)
+            remote_version = remote_v_match.group(1) if remote_v_match else "Unknown"
+
+            # 3. COMPARISON LOGIC (Hash-First Integrity)
+            # If hashes differ (code changed) OR version differs, trigger update
+            if remote_hash != local_hash or remote_version != VERSION:
+                # AUTO-RESIZE PADDING (No Break Codes)
+                cols, _ = shutil.get_terminal_size(fallback=(80, 24))
                 
-                if remote_version != VERSION:
-                    print(f"\n  {G}[UPDATE AVAILABLE]{W} New Version: {remote_version}")
-                    print(f"  {DIM}Current Version: {VERSION}{RES}")
+                print(f"\n  {G}[UPDATE AVAILABLE]{W} New Version: {remote_version}")
+                print(f"  {DIM}Current Version: {VERSION}{RES}")
+                
+                confirm = input(f"\n  {W}Install update? (y/n): {RES}").lower()
+                if confirm == 'y':
+                    spin("Downloading & Patching...", 2)
                     
-                    confirm = input(f"\n  {W}Install update? (y/n): {RES}").lower()
-                    if confirm == 'y':
-                        spin("Downloading & Patching...", 2)
-                        # Overwrite the current script file
-                        with open(__file__, 'w', encoding='utf-8') as f:
-                            f.write(response.text)
-                        
-                        print(f"  {G}[SUCCESS]{W} System updated to v{remote_version}!{RES}")
-                        time.sleep(2)
-                        # Restart the script
-                        os.execv(sys.executable, ['python3'] + sys.argv)
+                    # Overwrite the current script file with the new verified source
+                    with open(__file__, 'w', encoding='utf-8') as f:
+                        f.write(remote_code)
+                    
+                    print(f"  {G}[SUCCESS]{W} System updated to v{remote_version}!{RES}")
+                    time.sleep(2)
+                    
+                    # HOT RESTART: Reload the script instantly with new code
+                    os.execv(sys.executable, ['python3'] + sys.argv)
                 else:
-                    print(f"\n  {G}[OK]{W} You are already on the latest version (v{VERSION}).{RES}")
+                    print(f"\n  {Y}[!]{W} Warning: System running on unverified code.{RES}")
                     time.sleep(2)
             else:
-                print(f"  {R}[!] Error: Could not find version info in repo.{RES}")
+                # Code and Version are perfectly synced (Forensic Match)
+                print(f"\n  {G}[OK]{W} You are already on the latest version (v{VERSION}).{RES}")
+                time.sleep(2)
         else:
+            # Handle Server/Repo connection failures
             print(f"  {R}[!] Fetch failed. Status: {response.status_code}{RES}")
             
     except Exception as e:
-        print(f"  {R}[!] Connection error: {e}{RES}")
+        # Catch and truncate connection/file errors to prevent UI break
+        print(f"  {R}[!] Connection error: {str(e)[:30]}{RES}")
     
     wait_enter()
     
