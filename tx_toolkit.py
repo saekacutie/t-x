@@ -25,7 +25,7 @@ def check_dependencies():
         end = time.time()+sec; i=0
         while time.time()<end:
             # TEXT FIRST | YELLOW SPINNER | DIMMED LOADING
-            sys.stdout.write(f"\r  {W}{text} {Y}{frm[i%6]}{RES} {DIM}(loading...){RES}")
+            sys.stdout.write(f"\r  {W}{text} {Y}{frm[i%6]}{RES} {DIM}{RES}")
             sys.stdout.flush()
             time.sleep(0.08); i+=1
         sys.stdout.write("\r"+" "*tw()+"\r")
