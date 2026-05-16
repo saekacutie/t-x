@@ -7,63 +7,66 @@ Usage : tx
 
 import os, sys, subprocess, time, shutil, re, hashlib
 
+# ── GLOBAL STYLE DEFINITIONS ──
+G, R, Y, C, W, DIM, RES = "\033[32m", "\033[31m", "\033[33m", "\033[36m", "\033[37m", "\033[90m", "\033[0m"
+
 # ── AUTO-INSTALLER / DEPENDENCY CHECK ──
 def check_dependencies():
     # ── NODES TO VERIFY ──
     os_nodes = ["python", "python-pip", "chromium", "openssl"]
     py_nodes = ["requests", "beautifulsoup4", "colorama"]
     
-    cols, _ = shutil.get_terminal_size(fallback=(80, 24))
+    # Tool for width detection to prevent break codes
+    def tw(): return shutil.get_terminal_size(fallback=(80, 24)).columns
     
-    def mini_spin(text):
-        frames = ['/', '-', '\\', '|']
-        for _ in range(5):
-            for f in frames:
-                sys.stdout.write(f"\r  \033[33m{f} {text} \033[90m(loading)...\033[0m")
-                sys.stdout.flush()
-                time.sleep(0.05)
-    
-    os.system('clear')
-    print("\033[90m── SYSTEM INTEGRITY CHECK ──\033[0m\n")
+    # YOUR ORIGINAL SPIN LOGIC (Text-First & Dynamic Clear)
+    def spin(text, sec=1.2):
+        frm = ['◜','◠','◝','◞','◡','◟']
+        end = time.time()+sec; i=0
+        while time.time()<end:
+            # TEXT FIRST | YELLOW SPINNER | DIMMED LOADING
+            sys.stdout.write(f"\r  {W}{text} {Y}{frm[i%6]}{RES} {DIM}(loading...){RES}")
+            sys.stdout.flush()
+            time.sleep(0.08); i+=1
+        sys.stdout.write("\r"+" "*tw()+"\r")
 
-    # 1. CORE PATCH: INSTALL 'WHICH' AND REFRESH REPOS
-    sys.stdout.write(f"  \033[33m/ Syncing System Repositories \033[90m(loading)...\033[0m")
-    sys.stdout.flush()
-    # Install 'which' first to prevent subprocess crashes
+    os.system('clear')
+    print(f"{DIM}── SYSTEM INTEGRITY CHECK ──{RES}\n")
+
+    # 1. CORE PATCH & REPO SYNC
+    spin("SYNCING SYSTEM REPOSITORIES", 1.5)
+    # Fix 'which' first to ensure stable checks
     subprocess.run(["pkg", "install", "which", "-y"], capture_output=True)
     subprocess.run(["pkg", "update", "-y"], capture_output=True)
-    sys.stdout.write(f"\r  \033[32m[OK]\033[0m OS Repositories are synchronized." + " "*(cols-40) + "\n")
+    sys.stdout.write(f"\r  {G}[OK]{RES} SYSTEM_REPOSITORIES_SYNCHRONIZED\n")
 
     # 2. SYSTEM BINARY CHECK
     for pkg in os_nodes:
-        # Now safe to use 'which' because we installed it above
-        check = subprocess.run(["which", pkg], capture_output=True)
-        if check.returncode == 0:
-            print(f"  \033[32m[OK]\033[0m {pkg:<15} is already verified.")
+        if shutil.which(pkg):
+            print(f"  {G}[OK]{RES} {pkg:<15} is already verified.")
         else:
-            mini_spin(f"Installing {pkg}")
+            spin(f"INSTALLING {pkg.upper()}", 1.2)
             subprocess.run(["pkg", "install", pkg, "-y"], capture_output=True)
-            print(f"\r  \033[32m[+]\033[0m {pkg:<15} successfully patched.    ")
+            print(f"\r  {G}[+]{RES} {pkg:<15} successfully patched.")
 
     # 3. PYTHON LIBRARY CHECK
     for lib in py_nodes:
         lib_name = "bs4" if lib == "beautifulsoup4" else lib
         try:
             __import__(lib_name)
-            print(f"  \033[32m[OK]\033[0m {lib:<15} is already installed.")
+            print(f"  {G}[OK]{RES} {lib:<15} is already installed.")
         except ImportError:
-            mini_spin(f"Installing {lib}")
+            spin(f"INTEGRATING {lib.upper()}", 1.2)
             subprocess.check_call([sys.executable, "-m", "pip", "install", lib, "--quiet"])
-            print(f"\r  \033[32m[+]\033[0m {lib:<15} successfully installed.    ")
+            print(f"\r  {G}[+]{RES} {lib:<15} successfully installed.")
     
-    time.sleep(1)
-    os.system('clear')
+    time.sleep(1); os.system('clear')
 
 # Execute Master Check
 check_dependencies()
 
-# ── CORE IMPORTS ──
-import re, json, threading, random, hashlib, uuid, socket, ssl, string
+# ── CORE IMPORTS & INITIALIZATION ──
+import json, threading, random, uuid, socket, ssl, string
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, urljoin, quote
