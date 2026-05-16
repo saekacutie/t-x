@@ -5,51 +5,51 @@ Created by Saeka Tojirp
 Usage : tx
 """
 
-import os, sys, subprocess, time, shutil
+import os, sys, subprocess, time, shutil, re, hashlib
 
 # ── AUTO-INSTALLER / DEPENDENCY CHECK ──
 def check_dependencies():
-    # ALL SYSTEM AND PYTHON REQUIREMENTS
+    # ── NODES TO VERIFY ──
     os_nodes = ["python", "python-pip", "chromium", "openssl"]
     py_nodes = ["requests", "beautifulsoup4", "colorama"]
     
-    # ── DYNAMIC RESIZE LOGIC ──
-    # Gets Termux width and calculates a safe padding to prevent break codes
     cols, _ = shutil.get_terminal_size(fallback=(80, 24))
     
     def mini_spin(text):
         frames = ['/', '-', '\\', '|']
         for _ in range(5):
             for f in frames:
-                sys.stdout.write(f"\r  \033[33m{f} {text}...\033[0m")
+                sys.stdout.write(f"\r  \033[33m{f} {text} \033[90m(loading)...\033[0m")
                 sys.stdout.flush()
                 time.sleep(0.05)
     
     os.system('clear')
     print("\033[90m── SYSTEM INTEGRITY CHECK ──\033[0m\n")
 
-    # 1. OS REPO REFRESH (Added as requested)
-    sys.stdout.write(f"  \033[33m/ Syncing System Repositories...\033[0m")
+    # 1. CORE PATCH: INSTALL 'WHICH' AND REFRESH REPOS
+    sys.stdout.write(f"  \033[33m/ Syncing System Repositories \033[90m(loading)...\033[0m")
     sys.stdout.flush()
+    # Install 'which' first to prevent subprocess crashes
+    subprocess.run(["pkg", "install", "which", "-y"], capture_output=True)
     subprocess.run(["pkg", "update", "-y"], capture_output=True)
     sys.stdout.write(f"\r  \033[32m[OK]\033[0m OS Repositories are synchronized." + " "*(cols-40) + "\n")
 
-    # 2. SYSTEM BINARY CHECK (Resized)
+    # 2. SYSTEM BINARY CHECK
     for pkg in os_nodes:
-        # Prevents break codes by ensuring text stays within 'cols'
-        if subprocess.run(["which", pkg], capture_output=True).returncode == 0:
+        # Now safe to use 'which' because we installed it above
+        check = subprocess.run(["which", pkg], capture_output=True)
+        if check.returncode == 0:
             print(f"  \033[32m[OK]\033[0m {pkg:<15} is already verified.")
         else:
             mini_spin(f"Installing {pkg}")
             subprocess.run(["pkg", "install", pkg, "-y"], capture_output=True)
             print(f"\r  \033[32m[+]\033[0m {pkg:<15} successfully patched.    ")
 
-    # 3. PYTHON LIBRARY CHECK (Resized)
+    # 3. PYTHON LIBRARY CHECK
     for lib in py_nodes:
         lib_name = "bs4" if lib == "beautifulsoup4" else lib
         try:
             __import__(lib_name)
-            # Alignment ensures columns stay straight on any screen size
             print(f"  \033[32m[OK]\033[0m {lib:<15} is already installed.")
         except ImportError:
             mini_spin(f"Installing {lib}")
@@ -59,7 +59,7 @@ def check_dependencies():
     time.sleep(1)
     os.system('clear')
 
-# Run auto-installer
+# Execute Master Check
 check_dependencies()
 
 # ── CORE IMPORTS ──
