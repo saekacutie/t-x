@@ -5,15 +5,21 @@ Created by Saeka Tojirp
 Usage : tx
 """
 
-import os, sys, subprocess, time, re, requests
+import os, sys, subprocess, time, shutil
 
 # ── AUTO-INSTALLER / DEPENDENCY CHECK ──
 def check_dependencies():
-    required = ["requests", "beautifulsoup4", "colorama"]
+    # ALL SYSTEM AND PYTHON REQUIREMENTS
+    os_nodes = ["python", "python-pip", "chromium", "openssl"]
+    py_nodes = ["requests", "beautifulsoup4", "colorama"]
+    
+    # ── DYNAMIC RESIZE LOGIC ──
+    # Gets Termux width and calculates a safe padding to prevent break codes
+    cols, _ = shutil.get_terminal_size(fallback=(80, 24))
     
     def mini_spin(text):
         frames = ['/', '-', '\\', '|']
-        for _ in range(10):
+        for _ in range(5):
             for f in frames:
                 sys.stdout.write(f"\r  \033[33m{f} {text}...\033[0m")
                 sys.stdout.flush()
@@ -21,16 +27,34 @@ def check_dependencies():
     
     os.system('clear')
     print("\033[90m── SYSTEM INTEGRITY CHECK ──\033[0m\n")
-    
-    for lib in required:
+
+    # 1. OS REPO REFRESH (Added as requested)
+    sys.stdout.write(f"  \033[33m/ Syncing System Repositories...\033[0m")
+    sys.stdout.flush()
+    subprocess.run(["pkg", "update", "-y"], capture_output=True)
+    sys.stdout.write(f"\r  \033[32m[OK]\033[0m OS Repositories are synchronized." + " "*(cols-40) + "\n")
+
+    # 2. SYSTEM BINARY CHECK (Resized)
+    for pkg in os_nodes:
+        # Prevents break codes by ensuring text stays within 'cols'
+        if subprocess.run(["which", pkg], capture_output=True).returncode == 0:
+            print(f"  \033[32m[OK]\033[0m {pkg:<15} is already verified.")
+        else:
+            mini_spin(f"Installing {pkg}")
+            subprocess.run(["pkg", "install", pkg, "-y"], capture_output=True)
+            print(f"\r  \033[32m[+]\033[0m {pkg:<15} successfully patched.    ")
+
+    # 3. PYTHON LIBRARY CHECK (Resized)
+    for lib in py_nodes:
         lib_name = "bs4" if lib == "beautifulsoup4" else lib
         try:
             __import__(lib_name)
-            print(f"  \033[32m[OK]\033[0m {lib} is already installed.")
+            # Alignment ensures columns stay straight on any screen size
+            print(f"  \033[32m[OK]\033[0m {lib:<15} is already installed.")
         except ImportError:
             mini_spin(f"Installing {lib}")
             subprocess.check_call([sys.executable, "-m", "pip", "install", lib, "--quiet"])
-            print(f"\r  \033[32m[+]\033[0m {lib} successfully installed.    ")
+            print(f"\r  \033[32m[+]\033[0m {lib:<15} successfully installed.    ")
     
     time.sleep(1)
     os.system('clear')
@@ -39,7 +63,7 @@ def check_dependencies():
 check_dependencies()
 
 # ── CORE IMPORTS ──
-import re, json, threading, random, hashlib, uuid, shutil, socket, ssl, string
+import re, json, threading, random, hashlib, uuid, socket, ssl, string
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, urljoin, quote
