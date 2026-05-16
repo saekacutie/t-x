@@ -592,24 +592,37 @@ class RealChrome:
         self.chrome_path = shutil.which("chromium") or shutil.which("google-chrome-stable")
 
     def _start(self):
-        """Launches Headless Chromium with Remote Debugging Enabled"""
+        """Launches Headless Chromium with Stability Verification"""
         if not self.chrome_path:
             raise Exception("Chromium binary not found in system path")
             
+        # Use a stable Termux-local path for profiles to avoid permission errors
+        self.profile = f"/data/data/com.termux/files/home/.chrome_profile_{uuid.uuid4().hex[:8]}"
+        
         args = [
             self.chrome_path, 
             "--remote-debugging-port=9222", 
             "--headless=new",
-            "--no-sandbox", # Required for Termux/Root
+            "--no-sandbox", 
             "--disable-gpu", 
             "--disable-dev-shm-usage",
-            "--user-data-dir=/tmp/chrome-profile-" + str(uuid.uuid4())[:8]
+            f"--user-data-dir={self.profile}",
+            "--remote-debugging-address=127.0.0.1" # Force binding for local requests
         ]
         self.proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(2.5) # Allow engine to stabilize
+        
+        # ── STABILITY GUARD: Fixes "CDP Interface unreachable" ──
+        for _ in range(15):
+            try:
+                if requests.get("http://127.0.0.1:9222/json/version", timeout=1).status_code == 200:
+                    return True
+            except:
+                pass
+            time.sleep(1)
+        raise Exception("Engine failed to bind to port 9222")
 
     def _stop(self):
-        """Force Terminate Engine Instance"""
+        """Force Terminate Engine Instance and Cleanup"""
         if self.proc:
             try:
                 self.proc.terminate()
@@ -617,6 +630,9 @@ class RealChrome:
             except:
                 self.proc.kill()
             self.proc = None
+            # Cleanup profile to save Termux storage
+            if os.path.exists(self.profile):
+                shutil.rmtree(self.profile, ignore_errors=True)
 
     def _get_ws_url(self):
         """Retrieves the WebSocket Debugger URL from the Local Host"""
@@ -630,7 +646,7 @@ class RealChrome:
         """Handles Raw WebSocket Communication with the Chrome Engine"""
         import websocket # Ensure 'pip install websocket-client' is in dependencies
         try:
-            ws = websocket.create_connection(ws_url, timeout=10)
+            ws = websocket.create_connection(ws_url, timeout=15)
             msg_id = random.randint(1, 1000)
             payload = json.dumps({"id": msg_id, "method": method, "params": params})
             ws.send(payload)
@@ -652,48 +668,55 @@ class RealChrome:
 
             # 1. NAVIGATE TO TARGET
             self._execute_cdp(ws, "Page.navigate", {"url": url})
-            time.sleep(5) # Wait for DOM rendering
+            time.sleep(6) # Sufficient time for Cloudflare/JS heavy sites
 
             # 2. INJECT CREDENTIALS (Advanced Selector Mesh)
             js_inject = f"""
             (function() {{
                 const e = document.querySelector('input[type="email"], input[type="text"], input[name*="user"], input[id*="login"]');
                 const p = document.querySelector('input[type="password"]');
-                if (e) {{ e.value = '{email}'; e.dispatchEvent(new Event('input', {{ bubbles: true }})); }}
-                if (p) {{ p.value = '{password}'; p.dispatchEvent(new Event('input', {{ bubbles: true }})); }}
+                if (e) {{ 
+                    e.focus(); e.value = '{email}'; 
+                    e.dispatchEvent(new Event('input', {{ bubbles: true }})); 
+                }}
+                if (p) {{ 
+                    p.focus(); p.value = '{password}'; 
+                    p.dispatchEvent(new Event('input', {{ bubbles: true }})); 
+                }}
                 const b = document.querySelector('button[type="submit"], input[type="submit"], button.login-btn, #submit');
                 if (b) b.click(); else if (p && p.form) p.form.submit();
                 return "injected";
             }})();
             """
             self._execute_cdp(ws, "Runtime.evaluate", {"expression": js_inject})
-            time.sleep(4) # Wait for Auth Response
+            time.sleep(6) # Wait for redirect/authentication response
 
-            # 3. VERIFY SESSION INTEGRITY
-            # Looks for common 'Logged In' indicators or URL shifts
+            # 3. VERIFY SESSION INTEGRITY (Forensic Check)
             check_logic = """
             (function() {{
                 const keywords = ['logout', 'signout', 'my account', 'dashboard', 'settings', 'profile'];
                 const body = document.body.innerText.toLowerCase();
                 const hasKey = keywords.some(k => body.includes(k));
-                return {{ active: hasKey, url: window.location.href }};
+                const cookieCheck = document.cookie.length > 20;
+                return {{ active: hasKey || (cookieCheck && !window.location.href.includes('login')), url: window.location.href }};
             }})();
             """
+            # returnByValue: True is MANDATORY to get the result back
             eval_res = self._execute_cdp(ws, "Runtime.evaluate", {"expression": check_logic, "returnByValue": True})
             data = eval_res.get("result", {}).get("value", {})
 
             if data.get("active"):
                 res['active'] = True
-                res['info'] = "SESSION_VALID"
+                res['info'] = "VERIFIED_HIT"
             elif url.lower() not in data.get("url", "").lower():
-                # If the URL changed significantly, it's likely a successful redirect
                 res['active'] = True
-                res['info'] = "REDIRECT_AUTH"
+                res['info'] = "REDIRECT_HIT"
             else:
-                res['info'] = "AUTH_FAILED"
+                res['active'] = False
+                res['info'] = "INVALID"
 
         except Exception as e:
-            res['info'] = f"ERR: {str(e)[:20]}"
+            res['info'] = f"ERR: {str(e)[:15]}"
         finally:
             self._stop()
         return res
