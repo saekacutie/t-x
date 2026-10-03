@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+# Termux / editors
+*~
+.vscode/
+# OS
+.DS_Store
+Thumbs.db
