@@ -585,7 +585,7 @@ def check_for_updates():
     wait_enter()
     
  # ── REAL CHROME ENGINE: NUCLEAR STEALTH CDP ──
- class RealChrome:
+class RealChrome:
      def __init__(self):
          self.proc = None
          self.chrome_path = shutil.which("chromium")
